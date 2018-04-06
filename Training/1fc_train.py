@@ -31,11 +31,11 @@ def main(output_dir):
     epochs = 1000
     init_lr = 0.01
     lr_drop = 0.5
-    epochs_drop = 50
+    epochs_drop = 10
     lrate = LearningRateScheduler(step_decay(epochs,init_lr,lr_drop,epochs_drop))
 
     # train model
-    clf = FullyConnectedClassifier(epochs=epochs, hidden_layers=1, batch_size=128, dropout=0.5)
+    clf = FullyConnectedClassifier(epochs=epochs, hidden_layers=1, dimensions=[4096], batch_size=128, dropout=0.5)
     hist = clf.fit(train_data, train_labels, lr_schedule=lrate, val_data=val_data, val_labels=val_labels, log_dir=output_dir)
     train_acc = hist['acc'][-1]
     val_acc = hist['val_acc'][-1]
