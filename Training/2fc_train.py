@@ -28,14 +28,14 @@ def main(output_dir):
     val_data -= train_data_mean
 
     # define learning rate
-    epochs = 1000
+    epochs = 10
     init_lr = 0.01
     lr_drop = 0.5
-    epochs_drop = 50
+    epochs_drop = 100
     lrate = LearningRateScheduler(step_decay(epochs,init_lr,lr_drop,epochs_drop))
 
     # train model
-    clf = FullyConnectedClassifier(epochs=epochs, batch_size=128)
+    clf = FullyConnectedClassifier(epochs=epochs, hidden_layers=2, batch_size=128, dropout=0.5)
     hist = clf.fit(train_data, train_labels, lr_schedule=lrate, val_data=val_data, val_labels=val_labels, log_dir=output_dir)
     train_acc = hist['acc'][-1]
     val_acc = hist['val_acc'][-1]

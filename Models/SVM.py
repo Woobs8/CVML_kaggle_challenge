@@ -33,7 +33,7 @@ class SupportVectorMachine:
     def fit(self, data, labels, model_file=""):
         self.num_samples, self.num_features = data.shape
         self.classes = list(set(labels))
-        num_classes = len(self.classes)
+        self.num_classes = len(self.classes)
 
         if self.kernel=='linear' and (self.num_samples > self.num_features):
             self.dual = False
@@ -51,10 +51,14 @@ class SupportVectorMachine:
         return self
 
 
-    def predict(self, data, model_file="", output_file=""):
-        if model_file != "" and os.path.exists(model_file):
-            self.clf = joblib.load(model_file)
+    def load(self, model_file):
+        if os.path.exists(model_file):
+            self.clf = joblib.load(model_file)  
 
+        return self  
+
+
+    def predict(self, data, output_file=""):
         prediction = self.clf.predict(data)
 
         if output_file != "":

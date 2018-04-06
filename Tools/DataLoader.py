@@ -3,8 +3,9 @@
 
 import os
 import numpy as np
+from sklearn.utils import shuffle
 
-def load_vector_data(data_path, label_path):
+def load_vector_data(data_path, label_path, shuffle_data=True):
     # load data
     path, file_extension = os.path.splitext(data_path)
     path_numpy = path+'.npy'
@@ -22,4 +23,8 @@ def load_vector_data(data_path, label_path):
     else:
         labels = np.loadtxt(path+file_extension,delimiter=' ')
         np.save(path_numpy,labels)
+
+    # shuffle data and labels
+    if shuffle_data:
+        data, labels = shuffle(data,labels)
     return data, labels
