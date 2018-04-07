@@ -4,7 +4,7 @@
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 from Tools.DataReader import load_vector_data
-from Models.NN import KNearestNeighbors
+from Models.KNN import KNearestNeighbors
 from sklearn.metrics import accuracy_score
 import argparse
 import numpy as np
