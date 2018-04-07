@@ -37,14 +37,29 @@ class FullyConnectedClassifier:
         self.dimensions = dimensions
   
 
-    def fit(self, train_data, train_labels, log_dir, lr_schedule, val_data=None, val_labels=None):
+    def fit(self, train_data, train_labels, log_dir, lr_schedule, val_data=None, val_labels=None, class_weighting=True):
         self.num_samples, self.num_features = train_data.shape
         self.classes = list(set(train_labels))
         self.num_classes = len(self.classes)
 
-        # one-hot encode labels (labels start at 1, so ignore first column)
-        cat_train_labels = to_categorical(train_labels)[:,1:]
-        cat_val_labels = to_categorical(val_labels)[:,1:]
+        # labels must be from 0-num_classes-1, so label offset is subtracted
+        self.label_offset = self.classes[0]
+        train_labels -= self.label_offset
+        if not val_labels is None:
+            val_labels -= self.label_offset
+
+        # determine class weights to account for difference in samples for classes
+        if class_weighting:
+            unique, counts = np.unique(train_labels, return_counts=True)
+            class_weights = self.num_samples/counts
+            normalized_class_weights = class_weights / np.max(class_weights)
+            class_weights = dict(zip(unique, normalized_class_weights))
+        else:
+            class_weights = None
+
+        # one-hot encode labels
+        cat_train_labels = to_categorical(train_labels)
+        cat_val_labels = to_categorical(val_labels)
 
         # generate list of layer dimensions
         if self.dimensions is None:
@@ -73,9 +88,9 @@ class FullyConnectedClassifier:
 
         # fit the model
         if val_data is None or val_labels is None:
-            hist = self.model.fit(train_data, cat_train_labels, validation_split=0.1, epochs=self.epochs, batch_size=self.batch_size, callbacks=[early,tensorboard,lr_schedule])
+            hist = self.model.fit(train_data, cat_train_labels, validation_split=0.1, epochs=self.epochs, class_weight=class_weights, batch_size=self.batch_size, callbacks=[early,tensorboard,lr_schedule])
         else:
-            hist = self.model.fit(train_data, cat_train_labels, validation_data=(val_data,cat_val_labels), epochs=self.epochs, batch_size=self.batch_size, callbacks=[early,tensorboard,lr_schedule])
+            hist = self.model.fit(train_data, cat_train_labels, validation_data=(val_data,cat_val_labels), epochs=self.epochs, class_weight=class_weights, batch_size=self.batch_size, callbacks=[early,tensorboard,lr_schedule])
 
 
         if not os.path.exists(log_dir):
@@ -86,9 +101,11 @@ class FullyConnectedClassifier:
         return hist.history
 
 
-    def load(self, model_file):
+    def load(self, model_file, label_offset):
         if os.path.exists(model_file):
             self.model = load_model(model_file)
+
+        self.label_offset = label_offset
 
         return self
 
@@ -97,7 +114,7 @@ class FullyConnectedClassifier:
         prob = self.model.predict(data)
 
         # prediction = highest probability (+1 since labels start at 1)
-        prediction = np.argmax(prob,axis=1)+1
+        prediction = np.argmax(prob,axis=1)+self.label_offset
 
         if output_file != "":
             dir = os.path.dirname(output_file)

@@ -22,16 +22,11 @@ def main(output_dir):
     train_data, train_labels = load_vector_data(training_data_path, training_lbls_path)
     val_data, val_labels = load_vector_data(validation_data_path, validation_lbls_path)
 
-    # mean subtraction
-    train_data_mean = np.mean(train_data,axis=0) 
-    train_data -= train_data_mean
-    val_data -= train_data_mean
-
     # define learning rate
     epochs = 1000
     init_lr = 0.01
     lr_drop = 0.5
-    epochs_drop = 50
+    epochs_drop = 10
     lrate = LearningRateScheduler(step_decay(epochs,init_lr,lr_drop,epochs_drop))
 
     # train model

@@ -9,7 +9,7 @@ from Models.FC import FullyConnectedClassifier
 from sklearn.metrics import accuracy_score
 import argparse
 from keras.callbacks import LearningRateScheduler
-import numpy as np
+import numpy as np      
 
 training_data_path = 'Data/Train/trainVectors.txt'
 training_lbls_path = 'Data/Train/trainLbls.txt'
@@ -22,11 +22,6 @@ def main(output_dir):
     train_data, train_labels = load_vector_data(training_data_path, training_lbls_path)
     val_data, val_labels = load_vector_data(validation_data_path, validation_lbls_path)
 
-    # mean subtraction
-    train_data_mean = np.mean(train_data,axis=0) 
-    train_data -= train_data_mean
-    val_data -= train_data_mean
-
     # define learning rate
     epochs = 1000
     init_lr = 0.01
@@ -36,7 +31,7 @@ def main(output_dir):
 
     # train model
     clf = FullyConnectedClassifier(epochs=epochs, hidden_layers=2, dimensions=[4096,4096], batch_size=128, dropout=0.5)
-    hist = clf.fit(train_data, train_labels, lr_schedule=lrate, val_data=val_data, val_labels=val_labels, log_dir=output_dir)
+    hist = clf.fit(train_data, train_labels, lr_schedule=lrate, val_data=val_data, val_labels=val_labels, log_dir=output_dir, class_weighting=True)
     train_acc = hist['acc'][-1]
     val_acc = hist['val_acc'][-1]
 
