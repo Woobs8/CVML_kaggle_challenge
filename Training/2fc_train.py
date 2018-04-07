@@ -3,7 +3,7 @@
 
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
-from Tools.DataLoader import load_vector_data
+from Tools.DataReader import load_vector_data
 from Tools.LearningRate import step_decay
 from Models.FC import FullyConnectedClassifier
 from sklearn.metrics import accuracy_score
