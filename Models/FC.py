@@ -67,9 +67,11 @@ class FullyConnectedClassifier:
             dim_list = self.dimensions       
 
         prev_output_dim = self.num_features
-        for idx, i in enumerate(range(0,self.hidden_layers)):
+        for idx, layer in enumerate(range(1,self.hidden_layers+1)):
             self.model.add(Dense(dim_list[idx], input_dim=prev_output_dim, activation='relu'))
-            self.model.add(Dropout(self.dropout))
+            # add dropout between hidden layers
+            if layer < self.hidden_layers:
+                self.model.add(Dropout(self.dropout))
             prev_output_dim = dim_list[idx]
         self.model.add(Dense(self.num_classes, input_dim=prev_output_dim, activation='softmax'))
 
@@ -79,7 +81,7 @@ class FullyConnectedClassifier:
                             metrics=['accuracy'])
         
         # define stopping criteria
-        early = EarlyStopping(monitor='loss', min_delta=0, patience=10, verbose=1, mode='auto')
+        early = EarlyStopping(monitor='val_acc', min_delta=0, patience=10, verbose=1, mode='auto')
 
         # define tensorboard callback
         log_path = os.path.join(log_dir,'Graph')
