@@ -1,6 +1,5 @@
 import numpy as np
 import os
-from Tools.DataLoader import load_vector_data
 from keras.models import Sequential, load_model
 from keras.layers import Dense, Dropout
 from keras import optimizers
@@ -118,7 +117,7 @@ class FullyConnectedClassifier:
 
         if output_file != "":
             dir = os.path.dirname(output_file)
-            if not os.path.exists(dir):
+            if dir != "" and not os.path.exists(dir):
                 os.makedirs(dir)
             np.savetxt(output_file, prediction)
 
