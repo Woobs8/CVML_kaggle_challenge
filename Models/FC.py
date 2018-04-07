@@ -112,7 +112,7 @@ class FullyConnectedClassifier:
     def predict(self, data, output_file=""):      
         prob = self.model.predict(data)
 
-        # prediction = highest probability (+1 since labels start at 1)
+        # prediction = highest probability (+offset since labels may not start at 0)
         prediction = np.argmax(prob,axis=1)+self.label_offset
 
         if output_file != "":
