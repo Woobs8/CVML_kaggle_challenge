@@ -50,8 +50,8 @@ def main(output_dir):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='Train Train 1-layer fully-connected neural network',
-                                    description='''Train a softmax classifier and store the output to the specified directory''')
+    parser = argparse.ArgumentParser(prog='Train Train 2-layer fully-connected neural network',
+                                    description='''Train a 2-layer fully-connected neural network classifier and store the output to the specified directory''')
     parser.add_argument('output', 
                         help='output directory where results are stored')
 
