@@ -3,7 +3,7 @@
 
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
-from Tools.DataLoader import load_vector_data
+from Tools.DataReader import load_vector_data
 from Models.SVM import SupportVectorMachine
 from sklearn.metrics import accuracy_score
 import argparse

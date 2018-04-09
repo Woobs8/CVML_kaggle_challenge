@@ -10,9 +10,9 @@ def load_vector_data(data_path, label_path, shuffle_data=True):
     path, file_extension = os.path.splitext(data_path)
     path_numpy = path+'.npy'
     if os.path.exists(path_numpy):
-        data = np.load(path_numpy).transpose()
+        data = np.load(path_numpy)
     else:
-        data = np.loadtxt(path+file_extension,delimiter=' ')
+        data = np.loadtxt(path+file_extension,delimiter=' ').transpose()
         np.save(path_numpy,data)
 
     # load labels
