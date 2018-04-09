@@ -44,8 +44,8 @@ def create_image_lists(image_dir):
     return imglist
 
 if __name__ == '__main__':
-    from DataLoader import load_raw_data
     import sys
+    from Tools/DataReader import load_labels
 
     parser = argparse.ArgumentParser(prog='Separate images into folders sorted by classes',
                                     description='''Program separates images into folders sorted by the classes of the image.
@@ -66,11 +66,8 @@ if __name__ == '__main__':
     # Path is a data file
     if os.path.exists(args.path_to_pictures):
         if os.path.exists(args.path_to_labels):
-            # Get file name and path from argument
-            head, tail = os.path.split(args.path_to_labels)
-
             # Read labels from file
-            labels = load_raw_data(tail, head)
+            labels = load_labels(args.path_to_labels)
         
         else:
             print("Error: file '" + args.path_to_labels + "' not found")
