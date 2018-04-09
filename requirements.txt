@@ -17,6 +17,7 @@ Markdown==2.6.11
 matplotlib==2.2.2
 mccabe==0.6.1
 numpy==1.14.2
+Pillow==5.1.0
 protobuf==3.5.2.post1
 pylint==1.8.3
 pyparsing==2.2.0

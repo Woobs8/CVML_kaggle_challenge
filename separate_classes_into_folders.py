@@ -3,7 +3,7 @@ import os
 import argparse
 import tensorflow as tf
 import re
-from shutil import copyfile
+from shutil import move
 
 def separate_classes_into_folders(labels):
     """ """
@@ -12,15 +12,17 @@ def separate_classes_into_folders(labels):
     # Create The Folders Corrosponding To Labels
     for lbl in unique_lbls:
         path = args.path_to_save_images+"/"+str(int(lbl))
+        print("Creating Label folder: ")
+        print(path)
+        
         if not os.path.exists(path):
-            os.makedirs(str(int(lbl)))
+            os.makedirs(path)
     
         #Copy Images Into Class Separated Folders
-        #print(np.transpose(np.where(labels==lbl)))
         
         for idx in np.transpose(np.where(labels==lbl)):
             head, tail = os.path.split(imglist[int(idx)])
-            copyfile(imglist[int(idx)], path+"/"+tail)
+            move(imglist[int(idx)], path+"/"+tail)
 
 
 def create_image_lists(image_dir):
@@ -45,7 +47,7 @@ def create_image_lists(image_dir):
 
 if __name__ == '__main__':
     import sys
-    from Tools/DataReader import load_labels
+    from Tools.DataReader import load_labels
 
     parser = argparse.ArgumentParser(prog='Separate images into folders sorted by classes',
                                     description='''Program separates images into folders sorted by the classes of the image.
