@@ -23,15 +23,15 @@ def main(output_dir):
     validation_data, validation_labels = image_reader(validation_data_path,validation_lbls_path)
     
     # define learning rate
-    epochs = 1000
+    epochs = 100
     init_lr = 0.01
     lr_drop = 0.5
     epochs_drop = 10
     lrate = LearningRateScheduler(step_decay(epochs,init_lr,lr_drop,epochs_drop))
 
     # train model
-    clf = PretrainedConvolutionalNeuralNetwork(epochs=epochs, batch_size=128, dropout=0.5, architecture="VGG19", data_augmentation=True, num_freeze_layers=16, img_width = 256, img_height = 256,img_depth=3)
-    hist = clf.fit(training_data,training_labels,val_data=validation_data,val_labels=validation_labels ,steps_per_epoch = 4*1024, validation_steps=512, lr_schedule=lrate, log_dir=output_dir)
+    clf = PretrainedConvolutionalNeuralNetwork(epochs=epochs, batch_size=32, dropout=0.5, architecture="VGG19", data_augmentation=True, num_freeze_layers=18, img_width = 256, img_height = 256,img_depth=3)
+    hist = clf.fit(training_data,training_labels,val_data=validation_data,val_labels=validation_labels, lr_schedule=lrate, log_dir=output_dir)
     
     train_acc = hist['acc'][-1]
     val_acc = hist['val_acc'][-1]

@@ -12,7 +12,7 @@ from keras.callbacks import ModelCheckpoint, LearningRateScheduler, TensorBoard,
 SUPPORTED_ARCHITECTURES = ['VGG19']
 
 class PretrainedConvolutionalNeuralNetwork:
-    def __init__(self, architecture="VGG19", batch_size=32, epochs=1000, dropout=0.5,momentum=0.9, data_augmentation=False, num_freeze_layers=16, img_width = 256, img_height = 256, img_depth = 3):
+    def __init__(self, architecture="VGG19", batch_size=32, epochs=100, dropout=0.5,momentum=0.9, data_augmentation=False, num_freeze_layers=16, img_width = 256, img_height = 256, img_depth = 3):
         # hyper parameters
         self.momentum = momentum
         self.batch_size = batch_size
@@ -39,7 +39,7 @@ class PretrainedConvolutionalNeuralNetwork:
             raise ValueError('Architecture is not supported')
         
 
-    def fit(self, train_data, train_labels, steps_per_epoch, validation_steps, log_dir, lr_schedule, val_data=None, val_labels=None, class_weighting=True):
+    def fit(self, train_data, train_labels, log_dir, lr_schedule, val_data=None, val_labels=None, class_weighting=True):
 
         # Get Unique Class Labels
         unique, counts = np.unique(train_labels, return_counts=True)
@@ -120,8 +120,8 @@ class PretrainedConvolutionalNeuralNetwork:
             steps_per_epoch = len(train_data) / self.batch_size,
             epochs = self.epochs,
             validation_data = validation_generator,
-            validation_steps = validation_steps,
-            class_weight=class_weights,
+            validation_steps = len(val_data)/self.batch_size,
+            class_weight = class_weights,
             callbacks = [checkpoint, early, tensorboard, lr_schedule])
         else:
             if val_data is None or val_labels is None:
