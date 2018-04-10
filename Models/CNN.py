@@ -9,10 +9,10 @@ from keras.utils import to_categorical
 from keras import backend as k 
 from keras.callbacks import ModelCheckpoint, LearningRateScheduler, TensorBoard, EarlyStopping
 
-SUPPORTED_ARCHITECTURES = ['VGG16']
+SUPPORTED_ARCHITECTURES = ['VGG19']
 
 class PretrainedConvolutionalNeuralNetwork:
-    def __init__(self, architecture="VGG16", batch_size=32, epochs=1000, dropout=0.5,momentum=0.9, data_augmentation=False, num_freeze_layers=16, img_width = 256, img_height = 256, img_depth = 3):
+    def __init__(self, architecture="VGG19", batch_size=32, epochs=1000, dropout=0.5,momentum=0.9, data_augmentation=False, num_freeze_layers=16, img_width = 256, img_height = 256, img_depth = 3):
         # hyper parameters
         self.momentum = momentum
         self.batch_size = batch_size
@@ -46,8 +46,8 @@ class PretrainedConvolutionalNeuralNetwork:
         num_samples = len(unique)
         
         # Load the architecture to be used
-        if self.architecture is 'VGG16':
-            self.model = self.create_vgg16_model(num_samples, self.img_width,self.img_height,self.img_depth,self.num_freeze_layers)
+        if self.architecture is 'VGG19':
+            self.model = self.create_vgg19_model(num_samples, self.img_width,self.img_height,self.img_depth,self.num_freeze_layers)
         #elif:
             #"""" MORE MODELS TO COME """
             # Insert New model
@@ -76,7 +76,7 @@ class PretrainedConvolutionalNeuralNetwork:
         cat_val_labels = to_categorical(val_labels)
 
         # Initiate the train and test generators
-        if self.data_augmentation is True:
+        if self.data_augmentation:
             train_datagen = ImageDataGenerator(
                 rescale = 1./255,
                 horizontal_flip = True,
@@ -137,7 +137,7 @@ class PretrainedConvolutionalNeuralNetwork:
 
         return hist.history
 
-    def create_vgg16_model(self, num_classes, img_width, img_height, img_depth, num_freeze_layers=16):
+    def create_vgg19_model(self, num_classes, img_width, img_height, img_depth, num_freeze_layers=16):
         # Number of layers to freeze must be between 0 and 16 layers
         if num_freeze_layers < 0:
             num_freeze_layers = 0

@@ -30,7 +30,7 @@ def main(output_dir):
     lrate = LearningRateScheduler(step_decay(epochs,init_lr,lr_drop,epochs_drop))
 
     # train model
-    clf = PretrainedConvolutionalNeuralNetwork(epochs=epochs, batch_size=128, dropout=0.5, architecture="VGG16", data_augmentation=False, num_freeze_layers=16, img_width = 256, img_height = 256,img_depth=3)
+    clf = PretrainedConvolutionalNeuralNetwork(epochs=epochs, batch_size=128, dropout=0.5, architecture="VGG19", data_augmentation=True, num_freeze_layers=16, img_width = 256, img_height = 256,img_depth=3)
     hist = clf.fit(training_data,training_labels,val_data=validation_data,val_labels=validation_labels ,steps_per_epoch = 4*1024, validation_steps=512, lr_schedule=lrate, log_dir=output_dir)
     
     train_acc = hist['acc'][-1]
@@ -51,8 +51,8 @@ def main(output_dir):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='Train VGG16 convolutional neural network',
-                                    description='''Train VGG16 convolutional neural network and store the output to the specified directory''')
+    parser = argparse.ArgumentParser(prog='Train VGG19 convolutional neural network',
+                                    description='''Train VGG19 convolutional neural network and store the output to the specified directory''')
     parser.add_argument('output', 
                         help='output directory where results are stored')
 
