@@ -5,6 +5,7 @@ from keras.preprocessing.image import ImageDataGenerator
 from keras import optimizers
 from keras.models import Sequential, Model, load_model
 from keras.layers import Dropout, Flatten, Dense, GlobalAveragePooling2D
+from keras.utils import to_categorical
 from keras import backend as k 
 from keras.callbacks import ModelCheckpoint, LearningRateScheduler, TensorBoard, EarlyStopping
 
@@ -39,9 +40,14 @@ class PretrainedConvolutionalNeuralNetwork:
         
 
     def fit(self, train_data, train_labels, steps_per_epoch, validation_steps, log_dir, lr_schedule, val_data=None, val_labels=None, class_weighting=True):
+
+        # Get Unique Class Labels
+        unique, counts = np.unique(train_labels, return_counts=True)
+        num_samples = len(unique)
+        
         # Load the architecture to be used
         if self.architecture is 'VGG16':
-            self.model = self.create_vgg16_model(self.num_classes, self.img_width,self.img_height,self.img_depth,self.num_freeze_layers)
+            self.model = self.create_vgg16_model(num_samples, self.img_width,self.img_height,self.img_depth,self.num_freeze_layers)
         #elif:
             #"""" MORE MODELS TO COME """
             # Insert New model
@@ -51,22 +57,19 @@ class PretrainedConvolutionalNeuralNetwork:
         # compile the model 
         self.model.compile(loss = "categorical_crossentropy", optimizer = optimizers.SGD(lr=0.0, momentum=self.momentum), metrics=["accuracy"])
 
-        # Get Unique Class Labels
-        unique, counts = np.unique(train_labels, return_counts=True)
-
-        # determine class weights to account for difference in samples for classes
-        if class_weighting:
-            class_weights = self.num_samples/counts
-            normalized_class_weights = class_weights / np.max(class_weights)
-            class_weights = dict(zip(unique, normalized_class_weights))
-        else:
-            class_weights = None
-
         # labels must be from 0-num_classes-1, so label offset is subtracted
-        self.label_offset = unique[0]
+        self.label_offset = int(unique[0])
         train_labels -= self.label_offset
         if not val_labels is None:
             val_labels -= self.label_offset
+
+        # determine class weights to account for difference in samples for classes
+        if class_weighting:
+            class_weights = num_samples/counts
+            normalized_class_weights = class_weights / np.max(class_weights)
+            class_weights = dict(zip(unique-self.label_offset, normalized_class_weights))
+        else:
+            class_weights = None
 
         # one-hot encode labels
         cat_train_labels = to_categorical(train_labels)

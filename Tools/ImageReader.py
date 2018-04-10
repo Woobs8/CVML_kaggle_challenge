@@ -32,7 +32,7 @@ def create_image_lists(image_dir):
     dir_name = os.path.basename(image_dir)
     tf.logging.info("Looking for images in '" + dir_name + "'")
     for extension in extensions:
-        file_glob = os.path.join(image_dir, dir_name, '*.' + extension)
+        file_glob = os.path.join(image_dir, '*.' + extension)
         file_list.extend(tf.gfile.Glob(file_glob))
     if not file_list:
         tf.logging.warning('No files found')
