@@ -117,7 +117,7 @@ class PretrainedConvolutionalNeuralNetwork:
             # fit the model
             hist = self.model.fit_generator(
             train_generator,
-            steps_per_epoch = len(x_train) / self.batch_size,
+            steps_per_epoch = len(train_data) / self.batch_size,
             epochs = self.epochs,
             validation_data = validation_generator,
             validation_steps = validation_steps,
