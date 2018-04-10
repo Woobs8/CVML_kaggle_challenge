@@ -57,14 +57,14 @@ if __name__ == '__main__':
     
     parser.add_argument('-path_to_save_images_npy', 
                         help='Input path to folder where the images should be saved as numpy array',
-                        default=None))
+                        default=None)
 
     #  Parse Arguments
     args = parser.parse_args()
 
     # Path is a data file
     if os.path.exists(args.path_to_pictures):
-        return image_reader(args.path_to_pictures, args.path_to_labels, args.path_to_save_images_npy)
+        image_reader(args.path_to_pictures, args.path_to_labels, args.path_to_save_images_npy)
     else:
         print("Error: file '" + args.path_to_pictures + "' not found")
         exit(1)
