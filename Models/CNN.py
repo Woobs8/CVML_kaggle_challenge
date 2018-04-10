@@ -91,7 +91,7 @@ class PretrainedConvolutionalNeuralNetwork:
                 cat_train_labels,
                 batch_size = self.batch_size)
 
-            test_datagen = ImageDataGenerator(
+            validation_datagen = ImageDataGenerator(
                 rescale = 1./255,
                 horizontal_flip = True,
                 fill_mode = "nearest",
