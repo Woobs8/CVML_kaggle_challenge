@@ -11,9 +11,8 @@ from keras.callbacks import ModelCheckpoint, LearningRateScheduler, TensorBoard,
 SUPPORTED_ARCHITECTURES = ['VGG16']
 
 class PretrainedConvolutionalNeuralNetwork:
-    def __init__(self,num_classes, architecture="VGG16", batch_size=32, epochs=1000, dropout=0.5,momentum=0.9, data_augmentation=False, num_freeze_layers=16, img_width = 256, img_height = 256, img_depth = 3):
+    def __init__(self, architecture="VGG16", batch_size=32, epochs=1000, dropout=0.5,momentum=0.9, data_augmentation=False, num_freeze_layers=16, img_width = 256, img_height = 256, img_depth = 3):
         # hyper parameters
-        self.num_classes = num_classes
         self.momentum = momentum
         self.batch_size = batch_size
         self.epochs = epochs
@@ -39,7 +38,7 @@ class PretrainedConvolutionalNeuralNetwork:
             raise ValueError('Architecture is not supported')
         
 
-    def fit(self, train_data_dir, validation_data_dir, steps_per_epoch, validation_steps, log_dir, lr_schedule):
+    def fit(self, train_data, train_labels, steps_per_epoch, validation_steps, log_dir, lr_schedule, val_data=None, val_labels=None, class_weighting=True):
         # Load the architecture to be used
         if self.architecture is 'VGG16':
             self.model = self.create_vgg16_model(self.num_classes, self.img_width,self.img_height,self.img_depth,self.num_freeze_layers)
@@ -52,6 +51,27 @@ class PretrainedConvolutionalNeuralNetwork:
         # compile the model 
         self.model.compile(loss = "categorical_crossentropy", optimizer = optimizers.SGD(lr=0.0, momentum=self.momentum), metrics=["accuracy"])
 
+        # Get Unique Class Labels
+        unique, counts = np.unique(train_labels, return_counts=True)
+
+        # determine class weights to account for difference in samples for classes
+        if class_weighting:
+            class_weights = self.num_samples/counts
+            normalized_class_weights = class_weights / np.max(class_weights)
+            class_weights = dict(zip(unique, normalized_class_weights))
+        else:
+            class_weights = None
+
+        # labels must be from 0-num_classes-1, so label offset is subtracted
+        self.label_offset = unique[0]
+        train_labels -= self.label_offset
+        if not val_labels is None:
+            val_labels -= self.label_offset
+
+        # one-hot encode labels
+        cat_train_labels = to_categorical(train_labels)
+        cat_val_labels = to_categorical(val_labels)
+
         # Initiate the train and test generators
         if self.data_augmentation is True:
             train_datagen = ImageDataGenerator(
@@ -62,6 +82,11 @@ class PretrainedConvolutionalNeuralNetwork:
                 width_shift_range = 0.3,
                 height_shift_range=0.3,
                 rotation_range=30)
+            
+            train_generator = train_datagen.flow(
+                train_data,
+                cat_train_labels,
+                batch_size = self.batch_size)
 
             test_datagen = ImageDataGenerator(
                 rescale = 1./255,
@@ -71,20 +96,11 @@ class PretrainedConvolutionalNeuralNetwork:
                 width_shift_range = 0.3,
                 height_shift_range=0.3,
                 rotation_range=30)
-        else:
-            train_datagen = ImageDataGenerator()
-            validation_datagen = ImageDataGenerator()
-
-        # Define behaviour of generator (flow input from directory, flow batch_size etc.)
-        train_generator = train_datagen.flow_from_directory(
-            train_data_dir,
-            target_size = (self.img_height,self.img_width),
-            batch_size = self.batch_size, 
-            class_mode = "categorical")
-        validation_generator = validation_datagen.flow_from_directory(
-            validation_data_dir,
-            target_size = (self.img_height, self.img_width),
-            class_mode = "categorical")
+            
+            validation_generator = validation_datagen.flow(
+                val_data,
+                cat_val_labels,
+                batch_size = self.batch_size)
 
         # Save the model according to the conditions  
         checkpoint = ModelCheckpoint(self.architecture+".h5", monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', period=1)
@@ -94,14 +110,21 @@ class PretrainedConvolutionalNeuralNetwork:
         log_path = os.path.join(log_dir,'Graph')
         tensorboard = TensorBoard(log_dir=log_path, histogram_freq=0, write_graph=True, write_images=True, write_grads=True)
 
-        # fit the model
-        hist = self.model.fit_generator(
-        train_generator,
-        steps_per_epoch = steps_per_epoch,
-        epochs = self.epochs,
-        validation_data = validation_generator,
-        validation_steps = validation_steps,
-        callbacks = [checkpoint, early, tensorboard,lr_schedule])
+        if self.data_augmentation is True:
+            # fit the model
+            hist = self.model.fit_generator(
+            train_generator,
+            steps_per_epoch = len(x_train) / self.batch_size,
+            epochs = self.epochs,
+            validation_data = validation_generator,
+            validation_steps = validation_steps,
+            class_weight=class_weights,
+            callbacks = [checkpoint, early, tensorboard, lr_schedule])
+        else:
+            if val_data is None or val_labels is None:
+                hist = self.model.fit(train_data, cat_train_labels, validation_split=0.1, epochs=self.epochs, class_weight=class_weights, batch_size=self.batch_size, callbacks=[early,tensorboard,lr_schedule])
+            else:
+                hist = self.model.fit(train_data, cat_train_labels, validation_data=(val_data,cat_val_labels), epochs=self.epochs, class_weight=class_weights, batch_size=self.batch_size, callbacks=[early,tensorboard,lr_schedule])
 
         # Save The Model
         if not os.path.exists(log_dir):
@@ -200,7 +223,7 @@ class PretrainedConvolutionalNeuralNetwork:
         prob = self.model.predict(data)
 
         # prediction = highest probability (+offset since labels may not start at 0)
-        prediction = np.argmax(prob,axis=1)+1
+        prediction = np.argmax(prob,axis=1)+self.label_offset
 
         if output_file != "":
             dir = os.path.dirname(output_file)
