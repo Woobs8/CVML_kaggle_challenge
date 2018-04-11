@@ -10,6 +10,7 @@ from Tools.DataReader import load_labels
 def image_reader(path_to_images, path_to_labels, save_image_as_np_path=None):
     """ """
     imglist = create_image_lists(path_to_images)
+    
     # Create The Folders Corrosponding To Labels
     image_array = np.array([np.array(imread(fname)) for fname in imglist])
     labels = load_labels(path_to_labels)
