@@ -64,22 +64,27 @@ if __name__ == "__main__":
     
     parser.add_argument('-data_augmentation', 
                         help='output directory where results are stored',
-                        action='store_true')
+                        type=bool,
+                        action=False)
     
     parser.add_argument('-nb_epochs', 
                         help='Max number of epochs to run',
+                        type=int,
                         default=20)
 
     parser.add_argument('-init_learn_rate', 
                         help='Initial learning rate',
+                        type=float,
                         default=0.01)
     
     parser.add_argument('-learn_rate_drop', 
                         help='Factor that the learn rate drops',
+                        type=float,
                         default=0.5)
     
     parser.add_argument('-epochs_btw_drop', 
                         help='Number of epochs between learn rate drop',
+                        type=int,
                         default=10)
     
     parser.add_argument('-pretrained_architecture', 
@@ -89,10 +94,12 @@ if __name__ == "__main__":
     
     parser.add_argument('-training_batch_size', 
                         help='Batch size to use when training',
+                        type=int,
                         default=32)
 
     parser.add_argument('-dropout', 
                         help='Dropout percentage',
+                        type=float,
                         default=0.5)
     
     parser.add_argument('-optimizer', 
