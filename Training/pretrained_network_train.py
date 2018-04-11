@@ -65,7 +65,7 @@ if __name__ == "__main__":
     parser.add_argument('-data_augmentation', 
                         help='output directory where results are stored',
                         type=bool,
-                        action=False)
+                        default=False)
     
     parser.add_argument('-nb_epochs', 
                         help='Max number of epochs to run',
