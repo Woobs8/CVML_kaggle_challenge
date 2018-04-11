@@ -9,16 +9,15 @@ from keras.utils import to_categorical
 from keras import backend as k 
 from keras.callbacks import ModelCheckpoint, LearningRateScheduler, TensorBoard, EarlyStopping
 
-SUPPORTED_ARCHITECTURES = ['VGG19']
+SUPPORTED_ARCHITECTURES = ['VGG19','IRV2']
 
 class PretrainedConvolutionalNeuralNetwork:
-    def __init__(self, architecture="VGG19", batch_size=32, epochs=100, dropout=0.5,momentum=0.9, data_augmentation=False, num_freeze_layers=16, img_width = 256, img_height = 256, img_depth = 3):
+    def __init__(self, optimizer, architecture="VGG19", batch_size=32, epochs=100, dropout=0.5 , data_augmentation=False, img_width = 256, img_height = 256, img_depth = 3):
         # hyper parameters
-        self.momentum = momentum
         self.batch_size = batch_size
         self.epochs = epochs
-        self.num_freeze_layers = num_freeze_layers
         self.data_augmentation = data_augmentation
+        self.optimizer = optimizer
         if dropout < 0:
             self.dropout = 0
         elif dropout > 1:
@@ -46,16 +45,15 @@ class PretrainedConvolutionalNeuralNetwork:
         num_samples = len(unique)
         
         # Load the architecture to be used
-        if self.architecture is 'VGG19':
-            self.model = self.create_vgg19_model(num_samples, self.img_width,self.img_height,self.img_depth,self.num_freeze_layers)
-        #elif:
-            #"""" MORE MODELS TO COME """
-            # Insert New model
+        if self.architecture == 'VGG19':
+            self.model = self.create_vgg19_model(num_samples, self.img_width,self.img_height,self.img_depth,num_retrain_layers=3)
+        elif self.architecture == 'IRV2':
+            self.model = self.create_inception_resnet_v2_model(num_samples, self.img_width,self.img_height,self.img_depth,retrain_layer_name="conv2d_158")
         else:
-            raise ValueError('Architecture is not specified')
+            raise ValueError('Architecture is not specified')         
 
         # compile the model 
-        self.model.compile(loss = "categorical_crossentropy", optimizer = optimizers.SGD(lr=0.0, momentum=self.momentum), metrics=["accuracy"])
+        self.model.compile(loss = "categorical_crossentropy", optimizer = self.optimizer, metrics=["accuracy"])
 
         # labels must be from 0-num_classes-1, so label offset is subtracted
         self.label_offset = int(unique[0])
@@ -85,11 +83,6 @@ class PretrainedConvolutionalNeuralNetwork:
                 width_shift_range = 0.3,
                 height_shift_range=0.3,
                 rotation_range=30)
-            
-            train_generator = train_datagen.flow(
-                train_data,
-                cat_train_labels,
-                batch_size = self.batch_size)
 
             validation_datagen = ImageDataGenerator(
                 rescale = 1./255,
@@ -99,11 +92,19 @@ class PretrainedConvolutionalNeuralNetwork:
                 width_shift_range = 0.3,
                 height_shift_range=0.3,
                 rotation_range=30)
-            
-            validation_generator = validation_datagen.flow(
-                val_data,
-                cat_val_labels,
-                batch_size = self.batch_size)
+        else:
+            train_datagen = ImageDataGenerator()
+            validation_datagen = ImageDataGenerator()
+
+        train_generator = train_datagen.flow(
+            train_data,
+            cat_train_labels,
+            batch_size = self.batch_size)
+
+        validation_generator = validation_datagen.flow(
+            val_data,
+            cat_val_labels,
+            batch_size = self.batch_size)
 
         # Save the model according to the conditions  
         checkpoint = ModelCheckpoint(self.architecture+".h5", monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', period=1)
@@ -113,21 +114,21 @@ class PretrainedConvolutionalNeuralNetwork:
         log_path = os.path.join(log_dir,'Graph')
         tensorboard = TensorBoard(log_dir=log_path, histogram_freq=0, write_graph=True, write_images=True, write_grads=True)
 
-        if self.data_augmentation is True:
+        #if self.data_augmentation is True:
             # fit the model
-            hist = self.model.fit_generator(
-            train_generator,
-            steps_per_epoch = len(train_data) / self.batch_size,
-            epochs = self.epochs,
-            validation_data = validation_generator,
-            validation_steps = len(val_data)/self.batch_size,
-            class_weight = class_weights,
-            callbacks = [checkpoint, early, tensorboard, lr_schedule])
-        else:
-            if val_data is None or val_labels is None:
-                hist = self.model.fit(train_data, cat_train_labels, validation_split=0.1, epochs=self.epochs, class_weight=class_weights, batch_size=self.batch_size, callbacks=[early,tensorboard,lr_schedule])
-            else:
-                hist = self.model.fit(train_data, cat_train_labels, validation_data=(val_data,cat_val_labels), epochs=self.epochs, class_weight=class_weights, batch_size=self.batch_size, callbacks=[early,tensorboard,lr_schedule])
+        hist = self.model.fit_generator(
+        train_generator,
+        steps_per_epoch = len(train_data) / self.batch_size,
+        epochs = self.epochs,
+        validation_data = validation_generator,
+        validation_steps = len(val_data)/self.batch_size,
+        class_weight = class_weights,
+        callbacks = [checkpoint, early, tensorboard, lr_schedule])
+        #else:
+            #if val_data is None or val_labels is None:
+                #hist = self.model.fit(train_data, cat_train_labels, validation_split=0.1, epochs=self.epochs, class_weight=class_weights, batch_size=self.batch_size, callbacks=[early,tensorboard,lr_schedule])
+            #else:
+                #hist = self.model.fit(train_data, cat_train_labels, validation_data=(val_data,cat_val_labels), epochs=self.epochs, class_weight=class_weights, batch_size=self.batch_size, callbacks=[early,tensorboard,lr_schedule])
 
         # Save The Model
         if not os.path.exists(log_dir):
@@ -137,69 +138,13 @@ class PretrainedConvolutionalNeuralNetwork:
 
         return hist.history
 
-    def create_vgg19_model(self, num_classes, img_width, img_height, img_depth, num_freeze_layers=16):
-        # Number of layers to freeze must be between 0 and 16 layers
-        if num_freeze_layers < 0:
-            num_freeze_layers = 0
-        elif num_freeze_layers > 16:
-            num_freeze_layers = 16
-
+    def create_vgg19_model(self, num_classes, img_width, img_height, img_depth, num_retrain_layers=16):
         # Get The VGG19 Model
         model = applications.VGG19(weights = "imagenet", include_top=False, input_shape = (img_width, img_height, img_depth))
-        """
-        Layer (type)                 Output Shape              Param #   
-        =================================================================
-        input_1 (InputLayer)         (None, 256, 256, 3)       0         
-        _________________________________________________________________
-        block1_conv1 (Conv2D)        (None, 256, 256, 64)      1792      
-        _________________________________________________________________
-        block1_conv2 (Conv2D)        (None, 256, 256, 64)      36928     
-        _________________________________________________________________
-        block1_pool (MaxPooling2D)   (None, 128, 128, 64)      0         
-        _________________________________________________________________
-        block2_conv1 (Conv2D)        (None, 128, 128, 128)     73856     
-        _________________________________________________________________
-        block2_conv2 (Conv2D)        (None, 128, 128, 128)     147584    
-        _________________________________________________________________
-        block2_pool (MaxPooling2D)   (None, 64, 64, 128)       0         
-        _________________________________________________________________
-        block3_conv1 (Conv2D)        (None, 64, 64, 256)       295168    
-        _________________________________________________________________
-        block3_conv2 (Conv2D)        (None, 64, 64, 256)       590080    
-        _________________________________________________________________
-        block3_conv3 (Conv2D)        (None, 64, 64, 256)       590080    
-        _________________________________________________________________
-        block3_conv4 (Conv2D)        (None, 64, 64, 256)       590080    
-        _________________________________________________________________
-        block3_pool (MaxPooling2D)   (None, 32, 32, 256)       0         
-        _________________________________________________________________
-        block4_conv1 (Conv2D)        (None, 32, 32, 512)       1180160   
-        _________________________________________________________________
-        block4_conv2 (Conv2D)        (None, 32, 32, 512)       2359808   
-        _________________________________________________________________
-        block4_conv3 (Conv2D)        (None, 32, 32, 512)       2359808   
-        _________________________________________________________________
-        block4_conv4 (Conv2D)        (None, 32, 32, 512)       2359808   
-        _________________________________________________________________
-        block4_pool (MaxPooling2D)   (None, 16, 16, 512)       0         
-        _________________________________________________________________
-        block5_conv1 (Conv2D)        (None, 16, 16, 512)       2359808   
-        _________________________________________________________________
-        block5_conv2 (Conv2D)        (None, 16, 16, 512)       2359808   
-        _________________________________________________________________
-        block5_conv3 (Conv2D)        (None, 16, 16, 512)       2359808   
-        _________________________________________________________________
-        block5_conv4 (Conv2D)        (None, 16, 16, 512)       2359808   
-        _________________________________________________________________
-        block5_pool (MaxPooling2D)   (None, 8, 8, 512)         0         
-        =================================================================
-        Total params: 20,024,384.0
-        Trainable params: 20,024,384.0
-        Non-trainable params: 0.0
-        """
 
         # Freeze the layers which you don't want to train. Here I am freezing the first 5 layers.
-        for layer in model.layers[:num_freeze_layers]:
+        num_layers = (len(model.layers))
+        for layer in model.layers[:(num_layers-num_retrain_layers)]:
             layer.trainable = False
 
         #Adding custom Layers 
@@ -215,6 +160,29 @@ class PretrainedConvolutionalNeuralNetwork:
 
         return model_final
 
+    def create_inception_resnet_v2_model(self, num_classes, img_width, img_height, img_depth, retrain_layer_name="conv2d_158"):
+        # Get The Inception Resnet V2 Model
+        model = applications.inception_resnet_v2.InceptionResNetV2(include_top=False, weights='imagenet', input_shape = (img_width, img_height, img_depth))
+
+        # Freeze the layers which you don't want to train. Here I am freezing the first 5 layers.
+        num_layers = (len(model.layers))
+
+        for layer in model.layers:
+            if layer.name == retrain_layer_name:
+                break
+            layer.trainable = False
+            
+
+        #Adding custom Layers 
+        x = model.output
+        x = Flatten()(x)
+        predictions = Dense(num_classes, activation="softmax")(x)
+
+        # creating the final model 
+        model_final = Model(input = model.input, output = predictions)
+
+        model_final.summary()
+        return model_final
 
     def load(self, model_file):
         if os.path.exists(model_file):
