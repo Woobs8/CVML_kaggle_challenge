@@ -2,25 +2,20 @@
 # -*- coding: utf-8 -*-
 
 import sys, os
-sys.path.insert(1, os.path.join(sys.path[0], '..'))
+sys.path.insert(1, os.path.join(sys.path[0], '..','..'))
 from Tools.DataReader import load_vector_data
 from Tools.LearningRate import step_decay
-from Models.FC import FullyConnectedClassifier
+from FC import FullyConnectedClassifier
 from sklearn.metrics import accuracy_score
 import argparse
 from keras.callbacks import LearningRateScheduler
 import numpy as np
 
-training_data_path = 'Data/Train/trainVectors.txt'
-training_lbls_path = 'Data/Train/trainLbls.txt'
-validation_data_path = 'Data/Validation/valVectors.txt'
-validation_lbls_path = 'Data/Validation/valLbls.txt'
 
-
-def main(output_dir):
+def main(output_dir, train_data_path, train_lbl_path, val_data_path, val_lbl_path):
     # load data
-    train_data, train_labels = load_vector_data(training_data_path, training_lbls_path)
-    val_data, val_labels = load_vector_data(validation_data_path, validation_lbls_path)
+    train_data, train_labels = load_vector_data(train_data_path, train_lbl_path)
+    val_data, val_labels = load_vector_data(val_data_path, val_lbl_path)
 
     # define learning rate
     epochs = 1000
@@ -30,7 +25,7 @@ def main(output_dir):
     lrate = LearningRateScheduler(step_decay(epochs,init_lr,lr_drop,epochs_drop))
 
     # train model
-    clf = FullyConnectedClassifier(epochs=epochs, hidden_layers=1, dimensions=[4096], batch_size=128, dropout=0.5)
+    clf = FullyConnectedClassifier(epochs=epochs, batch_size=128)
     hist = clf.fit(train_data, train_labels, lr_schedule=lrate, val_data=val_data, val_labels=val_labels, log_dir=output_dir)
     train_acc = hist['acc'][-1]
     val_acc = hist['val_acc'][-1]
@@ -50,12 +45,24 @@ def main(output_dir):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='Train 1-layer fully-connected neural network',
-                                    description='''Train a 1-layer fully-connected neural network classifier and store the output to the specified directory''')
+    parser = argparse.ArgumentParser(prog='Train Softmax classifier',
+                                    description='''Train a softmax classifier and store the output to the specified directory''')
     parser.add_argument('output', 
                         help='output directory where results are stored')
 
+    parser.add_argument('train_data', 
+                        help='path to training data vector', nargs='?', default='../../Data/Train/trainVectors.txt')
+
+    parser.add_argument('train_label', 
+                        help='path to training label vector', nargs='?', default='../../Data/Train/trainLbls.txt')
+
+    parser.add_argument('val_data', 
+                        help='path to validation data vector', nargs='?', default='../../Data/Validation/valVectors.txt')
+
+    parser.add_argument('val_label', 
+                        help='path to validation label vector', nargs='?', default='../../Data/Validation/valLbls.txt')
+
     args = parser.parse_args()
-    main(args.output)
+    main(args.output, args.train_data, args.train_label, args.val_data, args.val_label)
 
     exit()

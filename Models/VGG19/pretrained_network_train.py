@@ -5,7 +5,7 @@ import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 from Tools.ImageReader import image_reader
 from Tools.LearningRate import step_decay
-from Models.CNN import PretrainedConvolutionalNeuralNetwork, SUPPORTED_ARCHITECTURES
+from CNN import PretrainedConvolutionalNeuralNetwork, SUPPORTED_ARCHITECTURES
 from sklearn.metrics import accuracy_score
 import argparse
 from keras.callbacks import LearningRateScheduler
