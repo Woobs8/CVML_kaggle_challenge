@@ -11,14 +11,14 @@ from keras.preprocessing.image import ImageDataGenerator
 from keras import backend as K
 K.set_image_dim_ordering('th')
 
-def augment_data(path_to_images, path_to_labels, save_image_path, number_images_per_class):
+def augment_data(path_to_images, path_to_labels, save_image_path, number_images_per_class,lbls_ath_and_file_name):
     """ """
     # Get Image List
     img_list = create_image_lists(path_to_images)
     img_name_list = [os.path.split(x)[1][:-4] for x in img_list]
+
     # load data
     X_train, y_train = image_reader(path_to_images,path_to_labels)
-
     # Data Augmentation To Use
     datagen = ImageDataGenerator(
         rescale = 1./255,
@@ -34,29 +34,39 @@ def augment_data(path_to_images, path_to_labels, save_image_path, number_images_
 
     # convert from int to float
     X_train = X_train.astype('float32')
-
+    
     # fit parameters from data
     datagen.fit(X_train)
-
+    
     # Sample Count
     unique, counts = np.unique(y_train, return_counts=True)
     label_offset = int(unique[0])
+    unique -= label_offset
     for curr_class in unique:
-        indices = np.where(y_train == curr_class)[0].tolist()
+        indices = np.where(y_train == curr_class+label_offset)[0].tolist()
         X_curr = X_train[indices,:,:,:]
         y_curr = y_train[indices]
         created_images=0
         for X_batch, y_batch in datagen.flow(X_curr, y_curr, 
-                                                batch_size=10, 
-                                                save_prefix="Image_C"+str(curr_class),
-                                                save_format="jpeg",
-                                                save_to_dir=save_image_path):
+                                            batch_size=10, 
+                                            save_prefix="Image_C"+str(int(curr_class)),
+                                            save_format="jpeg",
+                                            save_to_dir=save_image_path):
             num_ = y_batch.shape
             created_images += num_[0]
             string_ = "Creating Images Of Class " + str(int(curr_class)) + ", " + str(created_images) + "/" + str(number_images_per_class)
             print(string_, end="\r")
             if created_images >= number_images_per_class:
                 break
+        if(curr_class == 2):
+            break
+
+    # Save Labels For Augmented Data
+    img_list = create_image_lists(save_image_path)
+    img_name_list = [os.path.split(x)[1][:-4] for x in img_list]
+    new_lbls= create_labels(img_name_list)+label_offset
+    print(new_lbls)
+    np.save(lbls_ath_and_file_name,new_lbls)
 
 def create_image_lists(image_dir):
     """ Builds a list of images from the file system.
@@ -78,6 +88,11 @@ def create_image_lists(image_dir):
     imglist = [file_list[idx] for idx in arg_sort]
     return imglist
 
+def create_labels(img_name_list):
+    img_name_list = [os.path.split(x)[1][:-4] for x in img_name_list]
+    labels = np.array([ int(img_lbl.split("_")[1][1:]) for img_lbl in img_name_list])
+    return labels
+    
 if __name__ == '__main__':
     import sys
     from Tools.DataReader import load_labels
@@ -102,6 +117,9 @@ if __name__ == '__main__':
                         help='Total number of images that will be within each class (approximately)',
                         type=int,
                         default=0)
+    parser.add_argument('-lbls_ath_and_file_name',
+                        help='File name of augmented data labels numpy file',
+                        default="Lbls")
 
     #  Parse Arguments
     args = parser.parse_args()
@@ -112,7 +130,7 @@ if __name__ == '__main__':
     if os.path.exists(args.path_to_images):
         if not os.path.exists(args.dir_path_to_save_images):
             os.makedirs(args.dir_path_to_save_images )
-        augment_data(args.path_to_images, args.path_to_labels, args.dir_path_to_save_images, args.number_images_per_class)
+        augment_data(args.path_to_images, args.path_to_labels, args.dir_path_to_save_images, args.number_images_per_class,args.lbls_ath_and_file_name)
     else:
         print("Error: file '" + args.path_to_images + "' not found")
         exit(1)
