@@ -22,7 +22,7 @@ def main(output_dir, train_data_path, train_lbl_path, val_data_path, val_lbl_pat
     init_lr = 0.01
     lr_drop = 0.5
     epochs_drop = 10
-    lrate = LearningRateScheduler(step_decay(epochs,init_lr,lr_drop,epochs_drop))
+    lrate = LearningRateScheduler(step_decay(init_lr,lr_drop,epochs_drop))
 
     # train model
     clf = FullyConnectedClassifier(epochs=epochs, batch_size=128)
