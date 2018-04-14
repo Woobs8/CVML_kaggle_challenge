@@ -1,17 +1,13 @@
 import numpy as np
-import os, argparse, sys, re
+import os, argparse, sys
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
-import tensorflow as tf
-from shutil import move
-from scipy.misc import imread, imsave
-from DataReader import load_labels
 from ImageReader import image_reader
-from keras.datasets import mnist
 from keras.preprocessing.image import ImageDataGenerator
 from keras import backend as K
+import tensorflow
 K.set_image_dim_ordering('th')
 
-def augment_data(path_to_images, path_to_labels, save_image_path, number_images_per_class,lbls_ath_and_file_name):
+def augment_data(path_to_images, path_to_labels, save_image_path, number_images_per_class,lbls_path_and_file_name):
     """ """
     # Get Image List
     img_list = create_image_lists(path_to_images)
@@ -19,6 +15,7 @@ def augment_data(path_to_images, path_to_labels, save_image_path, number_images_
 
     # load data
     X_train, y_train = image_reader(path_to_images,path_to_labels)
+
     # Data Augmentation To Use
     datagen = ImageDataGenerator(
         rescale = 1./255,
@@ -54,19 +51,16 @@ def augment_data(path_to_images, path_to_labels, save_image_path, number_images_
                                             save_to_dir=save_image_path):
             num_ = y_batch.shape
             created_images += num_[0]
-            string_ = "Creating Images Of Class " + str(int(curr_class)) + ", " + str(created_images) + "/" + str(number_images_per_class)
+            string_ = "Creating Images Of Class " + str(int(curr_class)) + ", " + str(created_images) + "/" + str(number_images_per_class) + "       "
             print(string_, end="\r")
             if created_images >= number_images_per_class:
                 break
-        if(curr_class == 2):
-            break
 
     # Save Labels For Augmented Data
     img_list = create_image_lists(save_image_path)
     img_name_list = [os.path.split(x)[1][:-4] for x in img_list]
     new_lbls= create_labels(img_name_list)+label_offset
-    print(new_lbls)
-    np.save(lbls_ath_and_file_name,new_lbls)
+    np.save(lbls_path_and_file_name,new_lbls)
 
 def create_image_lists(image_dir):
     """ Builds a list of images from the file system.
@@ -76,12 +70,12 @@ def create_image_lists(image_dir):
     extensions = ['jpg', 'jpeg', 'JPG', 'JPEG']
     file_list = []
     dir_name = os.path.basename(image_dir)
-    tf.logging.info("Looking for images in '" + dir_name + "'")
+    print("Looking for images in '" + dir_name + "'")
     for extension in extensions:
         file_glob = os.path.join(image_dir, '*.' + extension)
         file_list.extend(tf.gfile.Glob(file_glob))
     if not file_list:
-        tf.logging.warning('No files found')
+        raise ValueError('No files found')
         return
     
     arg_sort = np.argsort([int(re.search("(\d*\.?\d)",val).group(0)) for val in file_list])
@@ -117,7 +111,7 @@ if __name__ == '__main__':
                         help='Total number of images that will be within each class (approximately)',
                         type=int,
                         default=0)
-    parser.add_argument('-lbls_ath_and_file_name',
+    parser.add_argument('-lbls_path_and_file_name',
                         help='File name of augmented data labels numpy file',
                         default="Lbls")
 
@@ -130,7 +124,7 @@ if __name__ == '__main__':
     if os.path.exists(args.path_to_images):
         if not os.path.exists(args.dir_path_to_save_images):
             os.makedirs(args.dir_path_to_save_images )
-        augment_data(args.path_to_images, args.path_to_labels, args.dir_path_to_save_images, args.number_images_per_class,args.lbls_ath_and_file_name)
+        augment_data(args.path_to_images, args.path_to_labels, args.dir_path_to_save_images, args.number_images_per_class,args.lbls_path_and_file_name)
     else:
         print("Error: file '" + args.path_to_images + "' not found")
         exit(1)
