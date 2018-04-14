@@ -4,11 +4,12 @@ import os
 from sklearn.externals import joblib
 
 class SupportVectorMachine:
-    def __init__(self, kernel='linear', gamma='auto', max_iter=100, coef0=0, tol=1e-3, degree=3):
+    def __init__(self, kernel='linear', C=100, gamma='auto', max_iter=100, coef0=0, tol=1e-3, degree=3):
         # Hyperparameters
         self.kernel = kernel
         self.max_iter = max_iter
-        self.gamma=gamma
+        self.gamma = gamma
+        self.C = C
         self.coef0 = coef0
         self.tol = tol
         self.degree = degree
@@ -22,9 +23,9 @@ class SupportVectorMachine:
 
         # Classifier
         if kernel=='linear':
-            self.clf=LinearSVC(max_iter=max_iter,tol=tol)
+            self.clf=LinearSVC(max_iter=max_iter, C=C, tol=tol, class_weight='balanced')
         elif kernel=='rbf' or kernel=='poly' or kernel=='sigmoid':
-            self.clf=SVC(kernel=kernel,degree=degree,gamma=gamma,max_iter=max_iter, coef0=coef0,tol=tol)
+            self.clf=SVC(kernel=kernel, C=C, degree=degree,gamma=gamma,max_iter=max_iter, coef0=coef0,tol=tol,class_weight='balanced')
         else:
             print(str(self.__class__)+" Error: unknown kernel '"+kernel+"'")
             exit(1)
