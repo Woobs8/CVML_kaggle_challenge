@@ -51,16 +51,16 @@ if __name__ == "__main__":
                         help='output directory where results are stored')
 
     parser.add_argument('train_data', 
-                        help='path to training data vector', nargs='?', default='../../Data/Train/trainVectors.txt')
+                        help='path to training data vector', nargs='?', default='Data/Train/trainVectors.txt')
 
     parser.add_argument('train_label', 
-                        help='path to training label vector', nargs='?', default='../../Data/Train/trainLbls.txt')
+                        help='path to training label vector', nargs='?', default='Data/Train/trainLbls.txt')
 
     parser.add_argument('val_data', 
-                        help='path to validation data vector', nargs='?', default='../../Data/Validation/valVectors.txt')
+                        help='path to validation data vector', nargs='?', default='Data/Validation/valVectors.txt')
 
     parser.add_argument('val_label', 
-                        help='path to validation label vector', nargs='?', default='../../Data/Validation/valLbls.txt')
+                        help='path to validation label vector', nargs='?', default='Data/Validation/valLbls.txt')
 
     args = parser.parse_args()
     main(args.output, args.train_data, args.train_label, args.val_data, args.val_label)

@@ -45,22 +45,22 @@ def main(output_dir, train_data_path, train_lbl_path, val_data_path, val_lbl_pat
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='Train Train 2-layer fully-connected neural network',
-                                    description='''Train a 2-layer fully-connected neural network classifier and store the output to the specified directory''')
+    parser = argparse.ArgumentParser(prog='Train a 2-layer fully-connected neural network',
+                                    description='''Train a 2-layer fully-connected neural network classifier and store the output in the specified directory''')
     parser.add_argument('output', 
                         help='output directory where results are stored')
 
     parser.add_argument('train_data', 
-                        help='path to training data vector', nargs='?', default='../../Data/Train/trainVectors.txt')
+                        help='path to training data vector', nargs='?', default='Data/Train/trainVectors.txt')
 
     parser.add_argument('train_label', 
-                        help='path to training label vector', nargs='?', default='../../Data/Train/trainLbls.txt')
+                        help='path to training label vector', nargs='?', default='Data/Train/trainLbls.txt')
 
     parser.add_argument('val_data', 
-                        help='path to validation data vector', nargs='?', default='../../Data/Validation/valVectors.txt')
+                        help='path to validation data vector', nargs='?', default='Data/Validation/valVectors.txt')
 
     parser.add_argument('val_label', 
-                        help='path to validation label vector', nargs='?', default='../../Data/Validation/valLbls.txt')
+                        help='path to validation label vector', nargs='?', default='Data/Validation/valLbls.txt')
     
     args = parser.parse_args()
     main(args.output, args.train_data, args.train_label, args.val_data, args.val_label)
