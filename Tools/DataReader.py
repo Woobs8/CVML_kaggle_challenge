@@ -40,3 +40,15 @@ def load_labels(label_path):
         np.save(path_numpy,labels)
 
     return labels
+
+def load_data(data_path):
+    # load data
+    path, file_extension = os.path.splitext(data_path)
+    path_numpy = path+'.npy'
+    if os.path.exists(path_numpy):
+        data = np.load(path_numpy)
+    else:
+        data = np.loadtxt(path+file_extension,delimiter=' ').transpose()
+        np.save(path_numpy,data)
+    
+    return data
