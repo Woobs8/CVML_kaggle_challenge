@@ -12,13 +12,16 @@ import numpy as np
 from keras.utils import to_categorical
 from keras import optimizers
 from keras.layers import Dense, Dropout
-from keras.models import Sequential      
+from keras.models import Sequential
+from sklearn.preprocessing import normalize      
 
 
 def train_fc_classifier(train_data_path, train_lbl_path, val_data_path, val_lbl_path, layers, dim, output_dir, max_epochs, init_lr, dropout, batch_size, lr_sched=None):
     # load data
     train_data, train_labels = load_vector_data(train_data_path, train_lbl_path)
     val_data, val_labels = load_vector_data(val_data_path,val_lbl_path)
+
+
 
     # labels must be from 0-num_classes-1, so label offset is subtracted
     unique, count = np.unique(train_labels,return_counts=True) 
@@ -132,7 +135,12 @@ if __name__ == "__main__":
     parser.add_argument('-batch_size', 
                         help='Batch size to use when training',
                         type=int,
-                        default=32)  
+                        default=32)
+
+        
+    parser.add_argument('-norm', 
+                        help='Normalize data before training classifier',
+                        action='store_true')   
 
     args = parser.parse_args()
     train_fc_classifier(train_data_path=args.train_data, 
