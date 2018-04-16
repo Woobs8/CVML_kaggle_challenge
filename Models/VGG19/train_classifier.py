@@ -6,16 +6,18 @@ sys.path.insert(1, os.path.join(sys.path[0], '..','..'))
 import argparse
 import numpy as np
 from keras import optimizers,layers
-from keras.models import Model
+from keras.models import Model, load_model
 from keras.utils import to_categorical
 from keras.applications import VGG19
+from Tools.LearningRate import step_decay
 from Tools.DataGenerator import DataGenerator
 from Tools.DataReader import load_labels
 from keras.callbacks import ModelCheckpoint, LearningRateScheduler, TensorBoard, EarlyStopping
+from keras import backend as K
 
 
 
-def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, init_lr, clf_dropout, batch_size, lr_sched=None):
+def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, init_lr, clf_dropout, batch_size, lr_sched=None,input_model=None):
     # Load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
@@ -34,25 +36,37 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
     # Get The VGG19 Model
     model = VGG19(weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
 
-    # freeze all layers, only the classifier is trained
-    for layer in model.layers:
-        layer.trainable = False
+    if input_model is None:
+        # freeze all layers, only the classifier is trained
+        for layer in model.layers:
+            layer.trainable = False
 
-    # Create The Classifier     
-    clf = layers.Flatten()(model.output)
-    clf = layers.Dense(1024, activation="relu")(clf)
-    clf = layers.Dropout(0.5,name="clf_dropout")(clf)
-    clf = layers.Dense(1024, activation="relu",name="clf_dense_2")(clf)
-    clf = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(clf)
-    
-    model = Model(input = model.input, output = clf)
+        # Create The Classifier     
+        clf = layers.Flatten()(model.output)
+        clf = layers.Dense(512, activation="relu",name="clf_dense_1")(clf)
+        clf = layers.Dropout(clf_dropout,name="clf_dropout")(clf)
+        clf = layers.Dense(512, activation="relu",name="clf_dense_2")(clf)
+        predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(clf)
+        
+        final_model = Model(input = model.input, output = predictions)
+        final_model.summary()
+        # compile the model 
+        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
 
-    # compile the model 
-    model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr, momentum=0.9, nesterov=True), metrics=["accuracy"])
-
+    else:
+        print("Using Input Model")
+        final_model = load_model(input_model)
+        # freeze all layers, only the classifier is trained
+        for layer in model.layers:
+            if layer.name == "clf_dense_1":
+                break
+            layer.trainable = False
+        final_model.summary()
+        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
+        
     # define model callbacks 
-    checkpoint = ModelCheckpoint("checkpoint.h5", monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', period=1)
-    early = EarlyStopping(monitor='val_acc', min_delta=0, patience=10, verbose=1, mode='auto')
+    checkpoint = ModelCheckpoint(filepath=output_dir+"/checkpoint.h5", monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', period=1)
+    early = EarlyStopping(monitor='val_acc', min_delta=0, patience=4, verbose=1, mode='auto')
     tb_path = os.path.join(output_dir,'Graph')
     tensorboard = TensorBoard(log_dir=tb_path, histogram_freq=0, write_graph=True, write_images=True, write_grads=True)
     
@@ -69,20 +83,19 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
     val_generator = DataGenerator(  path_to_images=val_data,
                                     labels=cat_val_labels, 
                                     batch_size=batch_size)
-                                    
-    return
+
     # fit model
-    model.fit_generator(train_generator,
+    final_model.fit_generator(train_generator,
                         steps_per_epoch = len(training_labels)/batch_size,
                         epochs = max_epochs,
                         validation_data = val_generator,
                         validation_steps = len(validation_labels)/batch_size,
                         callbacks = callback_list,
-                        workers=4,
-                        use_multiprocessing=True)
+                        workers=2,
+                        use_multiprocessing=False)
 
     # save final model
-    model.save_weights('rough_tuned_clf_vgg19.h5')
+    final_model.save_weights('rough_tuned_clf_vgg19.h5')
     
 
 if __name__ == "__main__":
@@ -138,6 +151,10 @@ if __name__ == "__main__":
                         help='Batch size to use when training',
                         type=int,
                         default=32)
+                        
+    parser.add_argument('-input_model', 
+                        help='Path to .h5 model to train last layers. First layer of the top layers to train must be named clf_dense_1',
+                        default=None)
 
     args = parser.parse_args()
     
@@ -150,4 +167,5 @@ if __name__ == "__main__":
                         init_lr=args.init_lr, 
                         clf_dropout=args.clf_dropout,
                         batch_size=args.batch_size, 
-                        lr_sched=args.lr_sched)
+                        lr_sched=args.lr_sched,
+                        input_model=args.input_model)

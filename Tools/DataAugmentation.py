@@ -1,10 +1,10 @@
 import numpy as np
-import os, argparse, sys
+import os, argparse, sys, re
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 from ImageReader import image_reader
 from keras.preprocessing.image import ImageDataGenerator
 from keras import backend as K
-import tensorflow
+import tensorflow as tf
 K.set_image_dim_ordering('th')
 
 def augment_data(path_to_images, path_to_labels, save_image_path, number_images_per_class,lbls_path_and_file_name):
@@ -39,6 +39,7 @@ def augment_data(path_to_images, path_to_labels, save_image_path, number_images_
     unique, counts = np.unique(y_train, return_counts=True)
     label_offset = int(unique[0])
     unique -= label_offset
+    print("Starting Data Augmentation \n")
     for curr_class in unique:
         indices = np.where(y_train == curr_class+label_offset)[0].tolist()
         X_curr = X_train[indices,:,:,:]
@@ -52,7 +53,7 @@ def augment_data(path_to_images, path_to_labels, save_image_path, number_images_
             num_ = y_batch.shape
             created_images += num_[0]
             string_ = "Creating Images Of Class " + str(int(curr_class)) + ", " + str(created_images) + "/" + str(number_images_per_class) + "       "
-            print(string_, end="\r")
+            print(string_,end='\r',flush=True)
             if created_images >= number_images_per_class:
                 break
 
