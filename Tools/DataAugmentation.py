@@ -5,16 +5,21 @@ from ImageReader import image_reader
 from keras.preprocessing.image import ImageDataGenerator
 from keras import backend as K
 import tensorflow as tf
+from scipy.misc import imresize
 K.set_image_dim_ordering('th')
 
-def augment_data(path_to_images, path_to_labels, save_image_path, number_images_per_class,lbls_path_and_file_name):
+def augment_data(path_to_images, path_to_labels, save_image_path, number_images_per_class,lbls_path_and_file_name, target_size=None):
     """ """
     # Get Image List
     img_list = create_image_lists(path_to_images)
     img_name_list = [os.path.split(x)[1][:-4] for x in img_list]
 
-    # load data
+    # load image data
     X_train, y_train = image_reader(path_to_images,path_to_labels)
+
+    # resize images to target size
+    if not target_size is None:
+        X_train = resize_images(X_train,target_size)
 
     # Data Augmentation To Use
     datagen = ImageDataGenerator(
@@ -25,9 +30,6 @@ def augment_data(path_to_images, path_to_labels, save_image_path, number_images_
         rotation_range=50,
         featurewise_center=True,
         data_format="channels_last")
-
-    # reshape to be [samples][pixels][width][height]
-    #X_train = X_train.reshape(X_train.shape[0], 1, 28, 28)
 
     # convert from int to float
     X_train = X_train.astype('float32')
@@ -130,3 +132,10 @@ if __name__ == '__main__':
         print("Error: file '" + args.path_to_images + "' not found")
         exit(1)
     
+
+def resize_images(image_data, target_size, interp='cubic'):
+    num_samples, h, l, c = image_data.shape
+    resized_data = np.zeros((num_samples, target_size[0], target_size[1], c))
+    for i, image in enumerate(image_data):
+        resized_data[i,:] = imresize(image,target_size,interp=interp)
+    return resized_data
