@@ -33,10 +33,10 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
     cat_train_labels = to_categorical(training_labels)
     cat_val_labels = to_categorical(validation_labels)
 
-    # Get The VGG19 Model
-    model = VGG19(weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
-
     if input_model is None:
+        # Get The VGG19 Model
+        model = VGG19(weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
+
         # freeze all layers, only the classifier is trained
         for layer in model.layers:
             layer.trainable = False
@@ -93,9 +93,11 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
                         callbacks = callback_list,
                         workers=2,
                         use_multiprocessing=False)
-
+    
+    print("Finished Training")
+    
     # save final model
-    final_model.save_weights('rough_tuned_clf_vgg19.h5')
+    final_model.save(output_dir+"/rough_tuned_clf_vgg19.h5")
     
 
 if __name__ == "__main__":
