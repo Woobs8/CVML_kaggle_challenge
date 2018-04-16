@@ -1,14 +1,15 @@
 import numpy as np
 import os, argparse, sys, re
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
-from ImageReader import image_reader
+from ImageReader import image_reader, create_image_lists
 from keras.preprocessing.image import ImageDataGenerator
 from keras import backend as K
 import tensorflow as tf
-from scipy.misc import imresize
+from scipy.misc import imresize, imsave
 K.set_image_dim_ordering('th')
 
-def augment_data(path_to_images, path_to_labels, save_image_path, number_images_per_class,lbls_path_and_file_name, target_size=None):
+
+def augment_data(path_to_images, path_to_labels, save_image_path, number_images_per_class,lbls_path_and_file_name, target_size=None, resize_only=False):
     """ """
     # Get Image List
     img_list = create_image_lists(path_to_images)
@@ -19,7 +20,14 @@ def augment_data(path_to_images, path_to_labels, save_image_path, number_images_
 
     # resize images to target size
     if not target_size is None:
-        X_train = resize_images(X_train,target_size)
+        X_train = resize_images(X_train,(target_size[0],target_size[1]))
+        
+        # return now if only image resizing is required
+        if resize_only:
+            for idx, image in enumerate(X_train):
+                im_path = os.path.join(save_image_path,'Image'+str(idx+1)+'.jpg')
+                imsave(im_path, image)   
+            return     
 
     # Data Augmentation To Use
     datagen = ImageDataGenerator(
@@ -64,31 +72,24 @@ def augment_data(path_to_images, path_to_labels, save_image_path, number_images_
     img_name_list = [os.path.split(x)[1][:-4] for x in img_list]
     new_lbls= create_labels(img_name_list)+label_offset
     np.save(lbls_path_and_file_name,new_lbls)
-
-def create_image_lists(image_dir):
-    """ Builds a list of images from the file system.
-    """
-    # The root directory comes first, so skip it.
-    is_root_dir = True
-    extensions = ['jpg', 'jpeg', 'JPG', 'JPEG']
-    file_list = []
-    dir_name = os.path.basename(image_dir)
-    print("Looking for images in '" + dir_name + "'")
-    for extension in extensions:
-        file_glob = os.path.join(image_dir, '*.' + extension)
-        file_list.extend(tf.gfile.Glob(file_glob))
-    if not file_list:
-        raise ValueError('No files found')
-        return
-    
-    arg_sort = np.argsort([int(re.search("(\d*\.?\d)",val).group(0)) for val in file_list])
-    imglist = [file_list[idx] for idx in arg_sort]
-    return imglist
+   
 
 def create_labels(img_name_list):
     img_name_list = [os.path.split(x)[1][:-4] for x in img_name_list]
     labels = np.array([ int(img_lbl.split("_")[1][1:]) for img_lbl in img_name_list])
     return labels
+
+
+def resize_images(image_data, target_size, interp='cubic'):
+    num_samples, h, l, c = image_data.shape
+    resized_data = np.zeros((num_samples, target_size[0], target_size[1], c))
+    
+    for i, image in enumerate(image_data):
+        resized_data[i,:] = imresize(image,target_size,interp=interp)
+        string_ = "Resizing images " + str(int(i+1)) + "/" + str(num_samples) + "       "
+        print(string_,end='\r',flush=True)
+    return resized_data
+
     
 if __name__ == '__main__':
     import sys
@@ -114,9 +115,20 @@ if __name__ == '__main__':
                         help='Total number of images that will be within each class (approximately)',
                         type=int,
                         default=0)
+
     parser.add_argument('-lbls_path_and_file_name',
                         help='File name of augmented data labels numpy file',
                         default="Lbls")
+
+    parser.add_argument('-target_size',
+                        help='Output image dimensions (h, w)',
+                        nargs=2,
+                        type=int,
+                        required=False)
+
+    parser.add_argument('-resize_only', 
+                        help='Only perform image resizing - no other augmentation',
+                        action="store_true")  
 
     #  Parse Arguments
     args = parser.parse_args()
@@ -127,15 +139,7 @@ if __name__ == '__main__':
     if os.path.exists(args.path_to_images):
         if not os.path.exists(args.dir_path_to_save_images):
             os.makedirs(args.dir_path_to_save_images )
-        augment_data(args.path_to_images, args.path_to_labels, args.dir_path_to_save_images, args.number_images_per_class,args.lbls_path_and_file_name)
+        augment_data(args.path_to_images, args.path_to_labels, args.dir_path_to_save_images, args.number_images_per_class,args.lbls_path_and_file_name, target_size=args.target_size, resize_only=args.resize_only)
     else:
         print("Error: file '" + args.path_to_images + "' not found")
         exit(1)
-    
-
-def resize_images(image_data, target_size, interp='cubic'):
-    num_samples, h, l, c = image_data.shape
-    resized_data = np.zeros((num_samples, target_size[0], target_size[1], c))
-    for i, image in enumerate(image_data):
-        resized_data[i,:] = imresize(image,target_size,interp=interp)
-    return resized_data
