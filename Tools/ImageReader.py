@@ -7,20 +7,23 @@ from shutil import move
 from scipy.misc import imread, imsave
 from Tools.DataReader import load_labels
 
-def image_reader(path_to_images, path_to_labels, save_image_as_np_path=None):
+def image_reader(path_to_images, path_to_labels=None, save_image_as_np_path=None):
     """ """
     imglist = create_image_lists(path_to_images)
     
     # Create The Folders Corrosponding To Labels
     image_array = np.array([np.array(imread(fname)) for fname in imglist])
-    labels = load_labels(path_to_labels)
+    if not path_to_labels is None:
+        labels = load_labels(path_to_labels)
     
-    if save_image_as_np_path is None:
-        return image_array, labels
+        if save_image_as_np_path is None:
+            return image_array, labels
+        else:
+            path = save_image_as_np_path+"/"+"Images.npy"
+            np.save(path,image_array)
+            return image_array, labels
     else:
-        path = save_image_as_np_path+"/"+"Images.npy"
-        np.save(path,image_array)
-        return image_array, labels
+        return image_array
 
 
 def create_image_lists(image_dir):
