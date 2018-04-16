@@ -40,7 +40,7 @@ class DataGenerator(Sequence):
         # Update Index
         self.idx = (self.idx + self.batch_size) % self.num_images
         # Load images in numpy array
-        X = np.array([np.array(imread(self.img_list[img_idx])) for img_idx in batch])
+        X = np.array([np.array(imread(self.img_list[img_idx])) for img_idx in batch]) * (1. / 255)
         # Get the labels
         y = self.labels[batch]
         return X, y
