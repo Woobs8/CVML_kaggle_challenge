@@ -16,7 +16,8 @@ from keras.callbacks import ModelCheckpoint, LearningRateScheduler, TensorBoard,
 from keras import backend as K
 
 
-def fine_tune_model(train_data, train_lbl, val_data, val_lbl, model_path, output_dir, retrain_layer_name, max_epochs, init_lr, batch_size, lr_sched=None, print_model_summary_only=False):
+
+def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, init_lr, batch_size, start_layer, stop_layer, lr_sched=None, input_model=None):
     # Load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
@@ -32,40 +33,34 @@ def fine_tune_model(train_data, train_lbl, val_data, val_lbl, model_path, output
     cat_train_labels = to_categorical(training_labels)
     cat_val_labels = to_categorical(validation_labels)
 
-    # load pre-trained model
-    final_model = load_model(model_path)
-    
-    
-    # freeze the specified layers of the pre-trained model
-    retrain_flag = False
-    if retrain_layer_name.isdigit():
-        for layer in final_model.layers[:-int(retrain_layer_name)]:
+    if input_model is None:
+        # Get The VGG19 Model
+        model = VGG19(weights = "imagenet", include_top=True)
+
+        # freeze all layers, only the classifier is trained
+        for layer in model.layers:
             layer.trainable = False
-        for layer in final_model.layers[-int(retrain_layer_name):]:
-            layer.trainable = True
-    elif retrain_layer_name.lower() == 'all':
+        
+        # Throw away softmax
+        model.layers.pop()
+
+        # Create The Classifier     
+        predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(clf)
+        final_model = Model(input = model.input, output = predictions)
+        # freeze all layers, only the classifier is trained
+        
         for layer in final_model.layers:
             layer.trainable = False
+
     else:
+        final_model = load_model(input_model)
+        # freeze all layers, only the classifier is trained
         for layer in final_model.layers:
-            if layer.name == retrain_layer_name:
-                retrain_flag = True
-            if retrain_flag:
-                layer.trainable = True
-            else:
-                layer.trainable = False
-
-    
-
-    final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
-    final_model.summary()
-    
-    if print_model_summary_only:
-        return
-    
+            layer.trainable = False
+        
     # define model callbacks 
     checkpoint = ModelCheckpoint(filepath=output_dir+"/checkpoint.h5", monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', period=1)
-    early = EarlyStopping(monitor='val_acc', min_delta=0, patience=4, verbose=1, mode='auto')
+    early = EarlyStopping(monitor='val_acc', min_delta=0.01, patience=3, verbose=1, mode='auto')
     tb_path = os.path.join(output_dir,'Graph')
     tensorboard = TensorBoard(log_dir=tb_path, histogram_freq=0, write_graph=True, write_images=True, write_grads=True)
     
@@ -74,29 +69,62 @@ def fine_tune_model(train_data, train_lbl, val_data, val_lbl, model_path, output
         callback_list = [checkpoint, early, tensorboard, lrate]
     else:
         callback_list = [checkpoint, early, tensorboard]
+    
 
     # Data generators
     train_generator = DataGenerator(path_to_images=train_data,
                                     labels=cat_train_labels, 
                                     batch_size=batch_size)
+    
     val_generator = DataGenerator(  path_to_images=val_data,
                                     labels=cat_val_labels, 
                                     batch_size=batch_size)
-
-    # fit model
-    final_model.fit_generator(train_generator,
-                        steps_per_epoch = len(training_labels)/batch_size,
-                        epochs = max_epochs,
-                        validation_data = val_generator,
-                        validation_steps = len(validation_labels)/batch_size,
-                        callbacks = callback_list,
-                        workers=2,
-                        use_multiprocessing=False)
     
-    print("Finished Training")
+    # Get list of layers to train recursively
+    idx = 0
+    train_flag = False
+    for layer in final_model.layers:
+        if layer.name == stop_layer:
+            train_flag = True
+        
+        if train_flag:
+            if layer.count_params() > 0:
+                train_layer_list[idx] = layer.name
+                idx += 1
+            
+            if layer.name == start_layer
+                break
+    
+    train_layer_list = train_layer_list.reverse()
+
+    for retrain_now in train_layer_list:
+        
+        for layer in final_model.layers:
+            if layer.name == retrain_now:
+                retrain_flag = True
+            if retrain_flag:    
+                layer.trainable = True
+            else:
+                layer.trainable = False
+            
+        # compile the model 
+        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
+
+        # fit model
+        final_model.fit_generator(train_generator,
+                            steps_per_epoch = len(training_labels)/batch_size,
+                            epochs = max_epochs,
+                            validation_data = val_generator,
+                            validation_steps = len(validation_labels)/batch_size,
+                            callbacks = callback_list,
+                            workers=2,
+                            use_multiprocessing=False)
+        
+        print("Finished training for layer: %s" %(retrain_now), flush=True)
+
 
     # save final model
-    final_model.save(output_dir+"/final_model.h5")
+    final_model.save(output_dir + "/recursive_clf_vgg19.h5")
     
 
 if __name__ == "__main__":
@@ -127,13 +155,13 @@ if __name__ == "__main__":
                         help='output directory where results are stored',
                         required=True)
 
-    parser.add_argument('-input_model', 
-                        help='Path to .h5 model to train last layers. First layer of the top layers to train must be named clf_dense_1',
+    parser.add_argument('-stop_layer', 
+                        help='Layer to start recursive training from (layer is included in training)',
                         required=True)
-    
-    parser.add_argument('-retrain_layer_name', 
-                        help="The layer name from where the model should be fine-tuned, \"all\" is a valid value, where all layers will be frozen including the classifier. If a number is given the last \"x\" number of the network will be retrained.",
-                        default='All')
+
+    parser.add_argument('-start_layer', 
+                        help='Layer to stop recursive training from (layer is included in training)',
+                        required=True)  
 
     parser.add_argument('-epochs', 
                         help='Max number of epochs to run',
@@ -144,7 +172,7 @@ if __name__ == "__main__":
                         help='Initial learning rate',
                         type=float,
                         default=0.01)
-    
+   
     parser.add_argument('-lr_sched',
                         help='Parameters for learning rate schedule (drop, epochs between drop)',
                         nargs=2,
@@ -155,22 +183,23 @@ if __name__ == "__main__":
                         help='Batch size to use when training',
                         type=int,
                         default=32)
-
-    parser.add_argument('-summary_only', 
-                        help='Stop Script after prining model summary (ie. no training)',
-                        action="store_true")
+                        
+    parser.add_argument('-input_model', 
+                        help='Path to .h5 model to train last layers. First layer of the top layers to train must be named clf_dense_1',
+                        default=None)
 
     args = parser.parse_args()
     
-    fine_tune_model(train_data=args.train_data, 
-                    train_lbl=args.train_label, 
-                    val_data=args.val_data, 
-                    val_lbl=args.val_label, 
-                    model_path=args.input_model,
-                    output_dir=args.output,
-                    retrain_layer_name=args.retrain_layer_name,
-                    max_epochs=args.epochs, 
-                    init_lr=args.init_lr, 
-                    batch_size=args.batch_size, 
-                    lr_sched=args.lr_sched,
-                    print_model_summary_only=args.summary_only)
+    train_classifier(   train_data=args.train_data, 
+                        train_lbl=args.train_label, 
+                        val_data=args.val_data, 
+                        val_lbl=args.val_label, 
+                        output_dir=args.output,
+                        max_epochs=args.epochs, 
+                        init_lr=args.init_lr, 
+                        clf_dropout=args.clf_dropout,
+                        batch_size=args.batch_size, 
+                        lr_sched=args.lr_sched,
+                        input_model=args.input_model,
+                        start_layer=args.start_layer,
+                        stop_layer=args.stop_layer)
