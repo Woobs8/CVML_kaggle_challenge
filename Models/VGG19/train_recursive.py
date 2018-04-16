@@ -17,7 +17,7 @@ from keras import backend as K
 
 
 
-def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, init_lr, batch_size, start_layer, stop_layer, lr_sched=None, input_model=None):
+def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, lr, batch_size, start_layer, stop_layer, lr_sched=None, input_model=None, print_model_summary_only=False):
     # Load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
@@ -43,12 +43,12 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
         
         # Throw away softmax
         model.layers.pop()
-
-        # Create The Classifier     
-        predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(clf)
-        final_model = Model(input = model.input, output = predictions)
-        # freeze all layers, only the classifier is trained
         
+        # Create The Classifier     
+        predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(model.layers[-1].output)
+        final_model = Model(input = model.input, output = predictions)
+
+        # freeze all layers, only the classifier is trained 
         for layer in final_model.layers:
             layer.trainable = False
 
@@ -57,7 +57,11 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
         # freeze all layers, only the classifier is trained
         for layer in final_model.layers:
             layer.trainable = False
-        
+
+    if print_model_summary_only:
+        print(final_model.summary())
+        return 
+
     # define model callbacks 
     checkpoint = ModelCheckpoint(filepath=output_dir+"/checkpoint.h5", monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', period=1)
     early = EarlyStopping(monitor='val_acc', min_delta=0.01, patience=3, verbose=1, mode='auto')
@@ -65,7 +69,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
     tensorboard = TensorBoard(log_dir=tb_path, histogram_freq=0, write_graph=True, write_images=True, write_grads=True)
     
     if not lr_sched is None:
-        lrate = LearningRateScheduler(step_decay(init_lr, lr_sched[0], lr_sched[1]))
+        lrate = LearningRateScheduler(step_decay(lr[0], lr_sched[0], lr_sched[1]))
         callback_list = [checkpoint, early, tensorboard, lrate]
     else:
         callback_list = [checkpoint, early, tensorboard]
@@ -81,34 +85,31 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
                                     batch_size=batch_size)
     
     # Get list of layers to train recursively
-    idx = 0
+    train_layer_list = []
     train_flag = False
     for layer in final_model.layers:
+        print(layer.name)
         if layer.name == stop_layer:
             train_flag = True
         
         if train_flag:
+            print(layer.count_params())
             if layer.count_params() > 0:
-                train_layer_list[idx] = layer.name
-                idx += 1
+                train_layer_list.append(layer.name)
             
-            if layer.name == start_layer
+            if layer.name == start_layer:
                 break
-    
-    train_layer_list = train_layer_list.reverse()
+    train_layer_list = train_layer_list[::-1]
 
-    for retrain_now in train_layer_list:
-        
+    for idx, retrain_now in enumerate(train_layer_list):      
         for layer in final_model.layers:
-            if layer.name == retrain_now:
-                retrain_flag = True
-            if retrain_flag:    
+            if layer.name == retrain_now:  
                 layer.trainable = True
             else:
                 layer.trainable = False
             
         # compile the model 
-        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
+        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr[idx],momentum=0.9,nesterov=True), metrics=["accuracy"])
 
         # fit model
         final_model.fit_generator(train_generator,
@@ -128,8 +129,8 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
     
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='Fine-tune pre-trained network and existing classifier',
-                                    description='''Train last layers of pretrained convolutional neural network and store the output to the specified directory''')
+    parser = argparse.ArgumentParser(prog='Fine-tune pre-trained network recursively',
+                                    description='''Recursively train specified layers of pretrained convolutional neural network and store the output to the specified directory''')
 
     parser.add_argument('train_data', 
                         help='path to directory containing training images', 
@@ -168,10 +169,11 @@ if __name__ == "__main__":
                         type=int,
                         default=20)
 
-    parser.add_argument('-init_lr', 
-                        help='Initial learning rate',
+    parser.add_argument('-lr', 
+                        help='Learning rates for each training iteration',
+                        nargs='?',
                         type=float,
-                        default=0.01)
+                        default=[0.01])
    
     parser.add_argument('-lr_sched',
                         help='Parameters for learning rate schedule (drop, epochs between drop)',
@@ -188,6 +190,10 @@ if __name__ == "__main__":
                         help='Path to .h5 model to train last layers. First layer of the top layers to train must be named clf_dense_1',
                         default=None)
 
+    parser.add_argument('-summary_only', 
+                        help='Stop Script after prining model summary (ie. no training)',
+                        action="store_true")
+
     args = parser.parse_args()
     
     train_classifier(   train_data=args.train_data, 
@@ -196,10 +202,10 @@ if __name__ == "__main__":
                         val_lbl=args.val_label, 
                         output_dir=args.output,
                         max_epochs=args.epochs, 
-                        init_lr=args.init_lr, 
-                        clf_dropout=args.clf_dropout,
+                        lr=args.lr, 
                         batch_size=args.batch_size, 
                         lr_sched=args.lr_sched,
                         input_model=args.input_model,
                         start_layer=args.start_layer,
-                        stop_layer=args.stop_layer)
+                        stop_layer=args.stop_layer,
+                        print_model_summary_only=args.summary_only)

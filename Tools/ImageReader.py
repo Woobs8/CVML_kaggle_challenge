@@ -31,7 +31,7 @@ def create_image_lists(image_dir):
     """
     # The root directory comes first, so skip it.
     is_root_dir = True
-    extensions = ['jpg', 'jpeg', 'JPG', 'JPEG']
+    extensions = ['jpg', 'jpeg']
     file_list = []
     dir_name = os.path.basename(image_dir)
     tf.logging.info("Looking for images in '" + dir_name + "'")
@@ -41,7 +41,7 @@ def create_image_lists(image_dir):
     if not file_list:
         tf.logging.warning('No files found')
         return
-    
+
     arg_sort = np.argsort([int(re.search("(\d*\.?\d)",val).group(0)) for val in file_list])
     imglist = [file_list[idx] for idx in arg_sort]
     return imglist
