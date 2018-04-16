@@ -17,7 +17,7 @@ from keras import backend as K
 
 
 
-def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, init_lr, clf_dropout, batch_size, lr_sched=None,input_model=None):
+def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, init_lr, batch_size, start_layer, stop_layer, lr_sched=None, input_model=None):
     # Load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
@@ -35,34 +35,28 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
 
     if input_model is None:
         # Get The VGG19 Model
-        model = VGG19(weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
+        model = VGG19(weights = "imagenet", include_top=True)
 
         # freeze all layers, only the classifier is trained
         for layer in model.layers:
             layer.trainable = False
+        
+        # Throw away softmax
+        model.layers.pop()
 
         # Create The Classifier     
-        clf = layers.Flatten()(model.output)
-        clf = layers.Dense(512, activation="relu",name="clf_dense_1")(clf)
-        clf = layers.Dropout(clf_dropout,name="clf_dropout")(clf)
-        clf = layers.Dense(512, activation="relu",name="clf_dense_2")(clf)
         predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(clf)
-        
         final_model = Model(input = model.input, output = predictions)
-        final_model.summary()
-        # compile the model 
-        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
+        # freeze all layers, only the classifier is trained
+        
+        for layer in final_model.layers:
+            layer.trainable = False
 
     else:
-        print("Using Input Model")
         final_model = load_model(input_model)
         # freeze all layers, only the classifier is trained
         for layer in final_model.layers:
-            if layer.name == "clf_dense_1":
-                break
             layer.trainable = False
-        final_model.summary()
-        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
         
     # define model callbacks 
     checkpoint = ModelCheckpoint(filepath=output_dir+"/checkpoint.h5", monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', period=1)
@@ -75,29 +69,62 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
         callback_list = [checkpoint, early, tensorboard, lrate]
     else:
         callback_list = [checkpoint, early, tensorboard]
+    
 
     # Data generators
     train_generator = DataGenerator(path_to_images=train_data,
                                     labels=cat_train_labels, 
                                     batch_size=batch_size)
+    
     val_generator = DataGenerator(  path_to_images=val_data,
                                     labels=cat_val_labels, 
                                     batch_size=batch_size)
+    
+    # Get list of layers to train recursively
+    idx = 0
+    train_flag = False
+    for layer in final_model.layers:
+        if layer.name == stop_layer:
+            train_flag = True
+        
+        if train_flag:
+            if layer.count_params() > 0:
+                train_layer_list[idx] = layer.name
+                idx += 1
+            
+            if layer.name == start_layer
+                break
+    
+    train_layer_list = train_layer_list.reverse()
 
-    # fit model
-    final_model.fit_generator(train_generator,
-                        steps_per_epoch = len(training_labels)/batch_size,
-                        epochs = max_epochs,
-                        validation_data = val_generator,
-                        validation_steps = len(validation_labels)/batch_size,
-                        callbacks = callback_list,
-                        workers=2,
-                        use_multiprocessing=False)
-    
-    print("Finished Training")
-    
+    for retrain_now in train_layer_list:
+        
+        for layer in final_model.layers:
+            if layer.name == retrain_now:
+                retrain_flag = True
+            if retrain_flag:    
+                layer.trainable = True
+            else:
+                layer.trainable = False
+            
+        # compile the model 
+        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
+
+        # fit model
+        final_model.fit_generator(train_generator,
+                            steps_per_epoch = len(training_labels)/batch_size,
+                            epochs = max_epochs,
+                            validation_data = val_generator,
+                            validation_steps = len(validation_labels)/batch_size,
+                            callbacks = callback_list,
+                            workers=2,
+                            use_multiprocessing=False)
+        
+        print("Finished training for layer: %s" %(retrain_now), flush=True)
+
+
     # save final model
-    final_model.save(output_dir+"/rough_tuned_clf_vgg19.h5")
+    final_model.save(output_dir + "/recursive_clf_vgg19.h5")
     
 
 if __name__ == "__main__":
@@ -127,7 +154,15 @@ if __name__ == "__main__":
     parser.add_argument('-output', 
                         help='output directory where results are stored',
                         required=True)
-    
+
+    parser.add_argument('-stop_layer', 
+                        help='Layer to start recursive training from (layer is included in training)',
+                        required=True)
+
+    parser.add_argument('-start_layer', 
+                        help='Layer to stop recursive training from (layer is included in training)',
+                        required=True)  
+
     parser.add_argument('-epochs', 
                         help='Max number of epochs to run',
                         type=int,
@@ -137,11 +172,6 @@ if __name__ == "__main__":
                         help='Initial learning rate',
                         type=float,
                         default=0.01)
-
-    parser.add_argument('-clf_dropout', 
-                        help='Specify classifier dropout',
-                        type=float,
-                        default=0.5)
    
     parser.add_argument('-lr_sched',
                         help='Parameters for learning rate schedule (drop, epochs between drop)',
@@ -170,4 +200,6 @@ if __name__ == "__main__":
                         clf_dropout=args.clf_dropout,
                         batch_size=args.batch_size, 
                         lr_sched=args.lr_sched,
-                        input_model=args.input_model)
+                        input_model=args.input_model,
+                        start_layer=args.start_layer,
+                        stop_layer=args.stop_layer)
