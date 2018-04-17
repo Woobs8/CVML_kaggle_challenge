@@ -34,6 +34,11 @@ def fine_tune_model(train_data, train_lbl, val_data, val_lbl, model_path, output
     cat_train_labels = to_categorical(training_labels)
     cat_val_labels = to_categorical(validation_labels)
 
+    # Create Layers in case they are part of the model
+    inp = Input(shape=(None, None, 3),name='image_input')
+    inp_resize = Lambda(lambda image: ktf.image.resize_images(image, (224, 224), ktf.image.ResizeMethod.BICUBIC),name='image_resize')(inp)
+    resize = Model(inp,inp_resize)
+
     # load pre-trained model
     print("load model")
     print(model_path)
