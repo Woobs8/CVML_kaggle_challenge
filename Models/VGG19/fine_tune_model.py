@@ -36,6 +36,7 @@ def fine_tune_model(train_data, train_lbl, val_data, val_lbl, model_path, output
 
     # load pre-trained model
     print("load model")
+    print(model_path)
     final_model = load_model(model_path)
     print("model loaded")
     # freeze the specified layers of the pre-trained model
