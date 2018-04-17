@@ -5,6 +5,7 @@ import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], '..','..'))
 import argparse
 import numpy as np
+from keras.layers import Input, Lambda
 from keras import optimizers,layers
 from keras.models import Model, load_model
 from keras.utils import to_categorical
@@ -33,9 +34,8 @@ def fine_tune_model(train_data, train_lbl, val_data, val_lbl, model_path, output
     cat_val_labels = to_categorical(validation_labels)
 
     # load pre-trained model
+    print(model_path)
     final_model = load_model(model_path)
-    
-    
     # freeze the specified layers of the pre-trained model
     retrain_flag = False
     if retrain_layer_name.isdigit():

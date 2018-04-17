@@ -6,6 +6,7 @@ sys.path.insert(1, os.path.join(sys.path[0], '..','..'))
 import argparse
 import numpy as np
 from keras import optimizers,layers
+from keras.layers import Input, Lambda
 from keras.models import Model, load_model
 from keras.utils import to_categorical
 from keras.applications import VGG19
@@ -16,6 +17,10 @@ from keras.callbacks import ModelCheckpoint, LearningRateScheduler, TensorBoard,
 from keras import backend as K
 
 
+
+#def lambda_(image):
+    #import tensorflow as ktf
+    #ktf.image.resize_images(image, (224, 224), ktf.image.ResizeMethod.BICUBIC)
 
 def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, init_lr, clf_dropout, batch_size, print_model_summary_only=False, lr_sched=None,input_model=None,compile_model=False,use_resize=False):
     # Load labels
@@ -36,7 +41,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
     if input_model is None:
         if use_resize:
             inp = Input(shape=(None, None, 3),name='image_input')
-            inp_resize = Lambda(lambda image: ktf.image.resize_images(image, (224, 224), ktf.image.ResizeMethod.BICUBIC),name='image_resize')(inp)
+            inp_resize = Lambda(lambda image: K.tf.image.resize_images(image, (224, 224), K.tf.image.ResizeMethod.BICUBIC),name='image_resize')(inp)
             resize = Model(inp,inp_resize)
 
             # Get The VGG19 Model
@@ -52,6 +57,8 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
             # freeze all layers, only the classifier is trained 
             for layer in final_model.layers:
                 layer.trainable = False
+                if layer.name == "clf_softmax":
+                    layer.trainable = True
         else:
             # Get The VGG19 Model
             model = VGG19(weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
@@ -65,15 +72,21 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
             
             final_model = Model(input = model.input, output = predictions)
         
-        # compile the model 
+            # freeze all layers, so that no unexpected layers are trained
+            train_flag = False
+            for layer in final_model.layers:
+                if layer.name == "clf_dense_1":
+                    train_flag = True
+                if train_flag:
+                    layer.trainable = True      
+                else:
+                    layer.trainable = False
+        
         final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
 
     else:
         final_model = load_model(input_model)
     
-    # freeze all layers, so that no unexpected layers are trained
-    for layer in final_model.layers:
-        layer.trainable = False
 
     # Print model summary and stop if specified
     final_model.summary()  
