@@ -17,7 +17,7 @@ from keras import backend as K
 
 
 
-def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, init_lr, clf_dropout, batch_size, lr_sched=None,input_model=None,compile_model=False,use_resize):
+def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, init_lr, clf_dropout, batch_size, lr_sched=None,input_model=None,compile_model=False,use_resize=False):
     # Load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)

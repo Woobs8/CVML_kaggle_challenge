@@ -56,13 +56,13 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
             for layer in final_model.layers:
                 layer.trainable = False
         else:
-                    # Get The VGG19 Model
+            # Get The VGG19 Model
             model = VGG19(weights = "imagenet", include_top=False)
             # Create The Classifier     
             clf = layers.Flatten()(model.output)
             clf = layers.Dense(4096, activation="relu",name="clf_dense_1")(clf)
-            clf = layers.Dropout(clf_dropout,name="clf_dropout")(clf)
-            clf = layers.Dense(4096, activation="relu",name="clf_dense_2")(clf)
+            clf = layers.Dropout(0.5, name="clf_dropout")(clf)
+            clf = layers.Dense(4096, activation="relu", name="clf_dense_2")(clf)
             predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(clf)
             
             final_model = Model(input = model.input, output = predictions)
