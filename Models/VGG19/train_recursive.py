@@ -19,7 +19,7 @@ from keras.layers import Lambda, Input
 
 
 
-def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, lr, batch_size, start_layer, stop_layer, lr_sched=None, input_model=None, print_model_summary_only=False):
+def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, lr, batch_size, start_layer, stop_layer, lr_sched=None, input_model=None, print_model_summary_only=False,use_resize=False):
     # Load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
@@ -36,36 +36,47 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
     cat_val_labels = to_categorical(validation_labels)
 
     if input_model is None:
-        inp = Input(shape=(None, None, 3),name='image_input')
-        inp_resize = Lambda(lambda image: ktf.image.resize_images(image, (224, 224), ktf.image.ResizeMethod.BICUBIC),name='image_resize')(inp)
-        resize = Model(inp,inp_resize)
-
         # Get The VGG19 Model
         model = VGG19(input_tensor=resize.output, weights = "imagenet", include_top=True)
 
-        # freeze all layers, only the classifier is trained
-        for layer in model.layers:
-            layer.trainable = False
+        if use_resize:
+            inp = Input(shape=(None, None, 3),name='image_input')
+            inp_resize = Lambda(lambda image: ktf.image.resize_images(image, (224, 224), ktf.image.ResizeMethod.BICUBIC),name='image_resize')(inp)
+            resize = Model(inp,inp_resize)
 
-        # Throw away softmax
-        model.layers.pop()
+            # Throw away softmax
+            model.layers.pop()
+            
+            # Create The Classifier     
+            predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(model.layers[-1].output)
+            final_model = Model(input = model.input, output = predictions)
+
+            # freeze all layers, only the classifier is trained 
+            for layer in final_model.layers:
+                layer.trainable = False
+        else:
+            # Create The Classifier     
+            clf = layers.Flatten()(model.output)
+            clf = layers.Dense(4096, activation="relu",name="clf_dense_1")(clf)
+            clf = layers.Dropout(clf_dropout,name="clf_dropout")(clf)
+            clf = layers.Dense(4096, activation="relu",name="clf_dense_2")(clf)
+            predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(clf)
+            
+            final_model = Model(input = model.input, output = predictions)
         
-        # Create The Classifier     
-        predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(model.layers[-1].output)
-        final_model = Model(input = model.input, output = predictions)
-
-        # freeze all layers, only the classifier is trained 
-        for layer in final_model.layers:
-            layer.trainable = False
+        # compile the model 
+        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
 
     else:
         final_model = load_model(input_model)
-        # freeze all layers, only the classifier is trained
-        for layer in final_model.layers:
-            layer.trainable = False
+    
+    # freeze all layers, so that no unexpected layers are trained
+    for layer in final_model.layers:
+        layer.trainable = False
 
+    # Print model summary and stop if specified
+    print(final_model.summary())
     if print_model_summary_only:
-        print(final_model.summary())
         return 
 
     # define model callbacks 
@@ -74,8 +85,9 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
     tb_path = os.path.join(output_dir,'Graph')
     tensorboard = TensorBoard(log_dir=tb_path, histogram_freq=0, write_graph=True, write_images=True, write_grads=True)
     
+    # Use Learn rate scheduler if specified
     if not lr_sched is None:
-        lrate = LearningRateScheduler(step_decay(lr[0], lr_sched[0], lr_sched[1]))
+        lrate = LearningRateScheduler(step_decay(lr, lr_sched[0], lr_sched[1]))
         callback_list = [checkpoint, early, tensorboard, lrate]
     else:
         callback_list = [checkpoint, early, tensorboard]
@@ -94,19 +106,20 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
     train_layer_list = []
     train_flag = False
     for layer in final_model.layers:
-        print(layer.name)
         if layer.name == stop_layer:
             train_flag = True
         
         if train_flag:
-            print(layer.count_params())
             if layer.count_params() > 0:
                 train_layer_list.append(layer.name)
             
             if layer.name == start_layer:
                 break
+    
+    # Reverse the list
     train_layer_list = train_layer_list[::-1]
 
+    # Recursive training of the network.
     for idx, retrain_now in enumerate(train_layer_list):      
         for layer in final_model.layers:
             if layer.name == retrain_now:  
@@ -115,7 +128,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
                 layer.trainable = False
             
         # compile the model 
-        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr[idx],momentum=0.9,nesterov=True), metrics=["accuracy"])
+        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
 
         # fit model
         final_model.fit_generator(train_generator,
@@ -177,9 +190,8 @@ if __name__ == "__main__":
 
     parser.add_argument('-lr', 
                         help='Learning rates for each training iteration',
-                        nargs='?',
                         type=float,
-                        default=[0.01])
+                        default=0.01)
    
     parser.add_argument('-lr_sched',
                         help='Parameters for learning rate schedule (drop, epochs between drop)',
@@ -199,6 +211,10 @@ if __name__ == "__main__":
     parser.add_argument('-summary_only', 
                         help='Stop Script after prining model summary (ie. no training)',
                         action="store_true")
+    
+    parser.add_argument('-use_resize', 
+                        help='Use resizing to 224*224*3',
+                        action="store_true")
 
     args = parser.parse_args()
     
@@ -214,4 +230,5 @@ if __name__ == "__main__":
                         input_model=args.input_model,
                         start_layer=args.start_layer,
                         stop_layer=args.stop_layer,
-                        print_model_summary_only=args.summary_only)
+                        print_model_summary_only=args.summary_only,
+                        use_resize=args.use_resize)

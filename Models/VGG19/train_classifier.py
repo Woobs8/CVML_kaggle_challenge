@@ -17,7 +17,7 @@ from keras import backend as K
 
 
 
-def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, init_lr, clf_dropout, batch_size, lr_sched=None,input_model=None,compile_model=False):
+def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, init_lr, clf_dropout, batch_size, lr_sched=None,input_model=None,compile_model=False,use_resize):
     # Load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
@@ -35,38 +35,48 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
 
     if input_model is None:
         # Get The VGG19 Model
-        model = VGG19(weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
+        model = VGG19(input_tensor=resize.output, weights = "imagenet", include_top=True)
 
-        # freeze all layers, only the classifier is trained
-        for layer in model.layers:
-            layer.trainable = False
+        if use_resize:
+            inp = Input(shape=(None, None, 3),name='image_input')
+            inp_resize = Lambda(lambda image: ktf.image.resize_images(image, (224, 224), ktf.image.ResizeMethod.BICUBIC),name='image_resize')(inp)
+            resize = Model(inp,inp_resize)
 
-        # Create The Classifier     
-        clf = layers.Flatten()(model.output)
-        clf = layers.Dense(512, activation="relu",name="clf_dense_1")(clf)
-        clf = layers.Dropout(clf_dropout,name="clf_dropout")(clf)
-        clf = layers.Dense(512, activation="relu",name="clf_dense_2")(clf)
-        predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(clf)
+            # Throw away softmax
+            model.layers.pop()
+            
+            # Create The Classifier     
+            predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(model.layers[-1].output)
+            final_model = Model(input = model.input, output = predictions)
+
+            # freeze all layers, only the classifier is trained 
+            for layer in final_model.layers:
+                layer.trainable = False
+        else:
+            # Create The Classifier     
+            clf = layers.Flatten()(model.output)
+            clf = layers.Dense(4096, activation="relu",name="clf_dense_1")(clf)
+            clf = layers.Dropout(clf_dropout,name="clf_dropout")(clf)
+            clf = layers.Dense(4096, activation="relu",name="clf_dense_2")(clf)
+            predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(clf)
+            
+            final_model = Model(input = model.input, output = predictions)
         
-        final_model = Model(input = model.input, output = predictions)
-
         # compile the model 
         final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
-        final_model.summary()
 
     else:
         final_model = load_model(input_model)
-        # freeze all layers, only the classifier is trained
-        for layer in final_model.layers:
-            if layer.name == "clf_dense_1":
-                break
-            layer.trainable = False
-        
-        if compile_model:
-            # If the model is compiled the Optimizer states are overwritten (does not start from where it ended)
-            final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
-        final_model.summary()
-        
+    
+    # freeze all layers, so that no unexpected layers are trained
+    for layer in final_model.layers:
+        layer.trainable = False
+
+    # Print model summary and stop if specified
+    print(final_model.summary())
+    if print_model_summary_only:
+        return 
+
     # define model callbacks 
     checkpoint = ModelCheckpoint(filepath=output_dir+"/checkpoint.h5", monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', period=1)
     early = EarlyStopping(monitor='val_acc', min_delta=0.01, patience=3, verbose=1, mode='auto')
@@ -165,6 +175,10 @@ if __name__ == "__main__":
                         help='Path to .h5 model to train last layers. First layer of the top layers to train must be named clf_dense_1',
                         default=None)
 
+    parser.add_argument('-use_resize', 
+                        help='Use resizing to 224*224*3',
+                        action="store_true")
+
     args = parser.parse_args()
     
     train_classifier(   train_data=args.train_data, 
@@ -178,4 +192,5 @@ if __name__ == "__main__":
                         batch_size=args.batch_size, 
                         lr_sched=args.lr_sched,
                         input_model=args.input_model,
-                        compile_model=args.compile)
+                        compile_model=args.compile,
+                        use_resize=args.use_resize)
