@@ -16,7 +16,7 @@ from keras.callbacks import ModelCheckpoint, LearningRateScheduler, TensorBoard,
 from keras import backend as K
 
 
-def fine_tune_model(train_data, train_lbl, val_data, val_lbl, model_path, output_dir, retrain_layer_name, max_epochs, init_lr, batch_size, lr_sched=None, print_model_summary_only=False):
+def fine_tune_model(train_data, train_lbl, val_data, val_lbl, model_path, output_dir, retrain_layer_name, max_epochs, init_lr, batch_size, lr_sched=None, print_model_summary_only=False,compile_model=False):
     # Load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
@@ -55,9 +55,10 @@ def fine_tune_model(train_data, train_lbl, val_data, val_lbl, model_path, output
             else:
                 layer.trainable = False
 
+    if compile_model:
+        # If the model is compiled the Optimizer states are overwritten (does not start from where it ended)
+        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
     
-
-    final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
     final_model.summary()
     
     if print_model_summary_only:
@@ -156,6 +157,10 @@ if __name__ == "__main__":
                         type=int,
                         default=32)
 
+    parser.add_argument('-compile', 
+                        help='Stop Script after prining model summary (ie. no training)',
+                        action="store_true")
+
     parser.add_argument('-summary_only', 
                         help='Stop Script after prining model summary (ie. no training)',
                         action="store_true")
@@ -173,4 +178,5 @@ if __name__ == "__main__":
                     init_lr=args.init_lr, 
                     batch_size=args.batch_size, 
                     lr_sched=args.lr_sched,
-                    print_model_summary_only=args.summary_only)
+                    print_model_summary_only=args.summary_only,
+                    compile_model=args.compile)

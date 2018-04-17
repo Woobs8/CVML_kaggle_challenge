@@ -17,7 +17,7 @@ from keras import backend as K
 
 
 
-def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, init_lr, clf_dropout, batch_size, lr_sched=None,input_model=None):
+def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, init_lr, clf_dropout, batch_size, lr_sched=None,input_model=None,compile_model=False):
     # Load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
@@ -49,20 +49,23 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
         predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(clf)
         
         final_model = Model(input = model.input, output = predictions)
-        final_model.summary()
+
         # compile the model 
         final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
+        final_model.summary()
 
     else:
-        print("Using Input Model")
         final_model = load_model(input_model)
         # freeze all layers, only the classifier is trained
         for layer in final_model.layers:
             if layer.name == "clf_dense_1":
                 break
             layer.trainable = False
+        
+        if compile_model
+            # If the model is compiled the Optimizer states are overwritten (does not start from where it ended)
+            final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
         final_model.summary()
-        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
         
     # define model callbacks 
     checkpoint = ModelCheckpoint(filepath=output_dir+"/checkpoint.h5", monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', period=1)
@@ -153,7 +156,11 @@ if __name__ == "__main__":
                         help='Batch size to use when training',
                         type=int,
                         default=32)
-                        
+
+    parser.add_argument('-compile', 
+                        help='Stop Script after prining model summary (ie. no training)',
+                        action="store_true")
+
     parser.add_argument('-input_model', 
                         help='Path to .h5 model to train last layers. First layer of the top layers to train must be named clf_dense_1',
                         default=None)
@@ -170,4 +177,5 @@ if __name__ == "__main__":
                         clf_dropout=args.clf_dropout,
                         batch_size=args.batch_size, 
                         lr_sched=args.lr_sched,
-                        input_model=args.input_model)
+                        input_model=args.input_model
+                        compile_model=args.compile)
