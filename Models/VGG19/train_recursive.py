@@ -57,7 +57,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
                 layer.trainable = False
         else:
             # Get The VGG19 Model
-            model = VGG19(weights = "imagenet", include_top=False)
+            model = VGG19(weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
             # Create The Classifier     
             clf = layers.Flatten()(model.output)
             clf = layers.Dense(4096, activation="relu",name="clf_dense_1")(clf)
@@ -66,9 +66,6 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
             predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(clf)
             
             final_model = Model(input = model.input, output = predictions)
-        
-        # compile the model 
-        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
 
     else:
         final_model = load_model(input_model)
@@ -78,7 +75,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
         layer.trainable = False
 
     # Print model summary and stop if specified
-    print(final_model.summary())
+    final_model.summary()
     if print_model_summary_only:
         return 
 

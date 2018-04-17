@@ -52,6 +52,8 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
             # freeze all layers, only the classifier is trained 
             for layer in final_model.layers:
                 layer.trainable = False
+                if layer.name == "softmax":
+                    layer.trainable = True
         else:
             # Get The VGG19 Model
             model = VGG19(weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
@@ -65,15 +67,21 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
             
             final_model = Model(input = model.input, output = predictions)
         
-        # compile the model 
+            # freeze all layers, so that no unexpected layers are trained
+            train_flag = False
+            for layer in final_model.layers:
+                if layer.name == "clf_dense_1":
+                    train_flag = True
+                if train_flag:
+                    layer.trainable = True      
+                else:
+                    layer.trainable = False
+        
         final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
 
     else:
         final_model = load_model(input_model)
     
-    # freeze all layers, so that no unexpected layers are trained
-    for layer in final_model.layers:
-        layer.trainable = False
 
     # Print model summary and stop if specified
     final_model.summary()  
