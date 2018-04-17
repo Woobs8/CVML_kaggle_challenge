@@ -14,6 +14,8 @@ from Tools.DataGenerator import DataGenerator
 from Tools.DataReader import load_labels
 from keras.callbacks import ModelCheckpoint, LearningRateScheduler, TensorBoard, EarlyStopping
 from keras import backend as K
+from keras.backend import tf as ktf
+from keras.layers import Lambda, Input
 
 
 
@@ -34,13 +36,17 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
     cat_val_labels = to_categorical(validation_labels)
 
     if input_model is None:
+        inp = Input(shape=(None, None, 3),name='image_input')
+        inp_resize = Lambda(lambda image: ktf.image.resize_images(image, (224, 224), ktf.image.ResizeMethod.BICUBIC),name='image_resize')(inp)
+        resize = Model(inp,inp_resize)
+
         # Get The VGG19 Model
-        model = VGG19(weights = "imagenet", include_top=True)
+        model = VGG19(input_tensor=resize.output, weights = "imagenet", include_top=True)
 
         # freeze all layers, only the classifier is trained
         for layer in model.layers:
             layer.trainable = False
-        
+
         # Throw away softmax
         model.layers.pop()
         
