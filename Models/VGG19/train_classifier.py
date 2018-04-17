@@ -15,6 +15,8 @@ from Tools.DataGenerator import DataGenerator
 from Tools.DataReader import load_labels
 from keras.callbacks import ModelCheckpoint, LearningRateScheduler, TensorBoard, EarlyStopping
 from keras import backend as K
+from keras.backend import tf as ktf
+
 
 
 
