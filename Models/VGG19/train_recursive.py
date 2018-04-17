@@ -65,7 +65,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
             final_model = Model(input = model.input, output = predictions)
         
         # compile the model 
-        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
+        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
 
     else:
         final_model = load_model(input_model)
