@@ -177,5 +177,5 @@ if __name__ == "__main__":
                         clf_dropout=args.clf_dropout,
                         batch_size=args.batch_size, 
                         lr_sched=args.lr_sched,
-                        input_model=args.input_model
+                        input_model=args.input_model,
                         compile_model=args.compile)
