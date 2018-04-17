@@ -6,6 +6,7 @@ sys.path.insert(1, os.path.join(sys.path[0], '..','..'))
 import argparse
 import numpy as np
 from keras import optimizers,layers
+from keras.layers import Input
 from keras.models import Model, load_model
 from keras.utils import to_categorical
 from keras.applications import VGG19
