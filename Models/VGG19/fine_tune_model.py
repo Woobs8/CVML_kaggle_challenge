@@ -15,7 +15,6 @@ from Tools.DataGenerator import DataGenerator
 from Tools.DataReader import load_labels
 from keras.callbacks import ModelCheckpoint, LearningRateScheduler, TensorBoard, EarlyStopping
 from keras import backend as K
-import tensorflow as ktf
 
 
 def fine_tune_model(train_data, train_lbl, val_data, val_lbl, model_path, output_dir, retrain_layer_name, max_epochs, init_lr, batch_size, lr_sched=None, print_model_summary_only=False,compile_model=False):
@@ -34,16 +33,9 @@ def fine_tune_model(train_data, train_lbl, val_data, val_lbl, model_path, output
     cat_train_labels = to_categorical(training_labels)
     cat_val_labels = to_categorical(validation_labels)
 
-    # Create Layers in case they are part of the model
-    inp = Input(shape=(None, None, 3),name='image_input')
-    inp_resize = Lambda(lambda image: ktf.image.resize_images(image, (224, 224), ktf.image.ResizeMethod.BICUBIC),name='image_resize')(inp)
-    resize = Model(inp,inp_resize)
-
     # load pre-trained model
-    print("load model")
     print(model_path)
     final_model = load_model(model_path)
-    print("model loaded")
     # freeze the specified layers of the pre-trained model
     retrain_flag = False
     if retrain_layer_name.isdigit():
@@ -65,7 +57,6 @@ def fine_tune_model(train_data, train_lbl, val_data, val_lbl, model_path, output
 
     if compile_model:
         # If the model is compiled the Optimizer states are overwritten (does not start from where it ended)
-        print("compile")
         final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
     
     final_model.summary()

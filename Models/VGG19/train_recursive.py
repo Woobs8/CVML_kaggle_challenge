@@ -14,7 +14,6 @@ from Tools.DataGenerator import DataGenerator
 from Tools.DataReader import load_labels
 from keras.callbacks import ModelCheckpoint, LearningRateScheduler, TensorBoard, EarlyStopping
 from keras import backend as K
-import tensorflow as ktf
 from keras.layers import Lambda, Input
 
 
@@ -39,7 +38,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
 
         if use_resize:
             inp = Input(shape=(None, None, 3),name='image_input')
-            inp_resize = Lambda(lambda image: ktf.image.resize_images(image, (224, 224), ktf.image.ResizeMethod.BICUBIC),name='image_resize')(inp)
+            inp_resize = Lambda(lambda image: K.tf.image.resize_images(image, (224, 224), K.tf.image.ResizeMethod.BICUBIC),name='image_resize')(inp)
             resize = Model(inp,inp_resize)
             
             # Get The VGG19 Model
