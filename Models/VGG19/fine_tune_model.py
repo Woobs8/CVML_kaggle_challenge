@@ -35,8 +35,9 @@ def fine_tune_model(train_data, train_lbl, val_data, val_lbl, model_path, output
     cat_val_labels = to_categorical(validation_labels)
 
     # load pre-trained model
+    print("load model")
     final_model = load_model(model_path)
-    
+    print("model loaded")
     # freeze the specified layers of the pre-trained model
     retrain_flag = False
     if retrain_layer_name.isdigit():
@@ -58,6 +59,7 @@ def fine_tune_model(train_data, train_lbl, val_data, val_lbl, model_path, output
 
     if compile_model:
         # If the model is compiled the Optimizer states are overwritten (does not start from where it ended)
+        print("compile")
         final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
     
     final_model.summary()
