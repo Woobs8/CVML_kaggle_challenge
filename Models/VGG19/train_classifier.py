@@ -34,13 +34,13 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
     cat_val_labels = to_categorical(validation_labels)
 
     if input_model is None:
-        # Get The VGG19 Model
-        model = VGG19(input_tensor=resize.output, weights = "imagenet", include_top=True)
-
         if use_resize:
             inp = Input(shape=(None, None, 3),name='image_input')
             inp_resize = Lambda(lambda image: ktf.image.resize_images(image, (224, 224), ktf.image.ResizeMethod.BICUBIC),name='image_resize')(inp)
             resize = Model(inp,inp_resize)
+
+            # Get The VGG19 Model
+            model = VGG19(input_tensor=resize.output, weights = "imagenet", include_top=True)
 
             # Throw away softmax
             model.layers.pop()
@@ -53,6 +53,9 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
             for layer in final_model.layers:
                 layer.trainable = False
         else:
+            # Get The VGG19 Model
+            model = VGG19(weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
+
             # Create The Classifier     
             clf = layers.Flatten()(model.output)
             clf = layers.Dense(4096, activation="relu",name="clf_dense_1")(clf)
