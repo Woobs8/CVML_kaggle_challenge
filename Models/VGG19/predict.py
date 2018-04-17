@@ -15,7 +15,6 @@ def predict(test_data, model_path, output_dir):
 
     # Load data
     X = image_reader(test_data)
-    print(X.shape)
     # load pre-trained model
     final_model = load_model(model_path)
     final_model.summary()
