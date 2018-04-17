@@ -62,7 +62,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
                 break
             layer.trainable = False
         
-        if compile_model
+        if compile_model:
             # If the model is compiled the Optimizer states are overwritten (does not start from where it ended)
             final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=init_lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
         final_model.summary()
