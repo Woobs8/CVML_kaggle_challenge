@@ -5,6 +5,7 @@ import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], '..','..'))
 import argparse
 import numpy as np
+from keras.layers import Input, Lambda
 from keras import optimizers,layers
 from keras.models import Model, load_model
 from keras.utils import to_categorical
@@ -14,6 +15,7 @@ from Tools.DataGenerator import DataGenerator
 from Tools.DataReader import load_labels
 from keras.callbacks import ModelCheckpoint, LearningRateScheduler, TensorBoard, EarlyStopping
 from keras import backend as K
+from keras.backend import tf as ktf
 
 
 def fine_tune_model(train_data, train_lbl, val_data, val_lbl, model_path, output_dir, retrain_layer_name, max_epochs, init_lr, batch_size, lr_sched=None, print_model_summary_only=False,compile_model=False):
@@ -34,7 +36,6 @@ def fine_tune_model(train_data, train_lbl, val_data, val_lbl, model_path, output
 
     # load pre-trained model
     final_model = load_model(model_path)
-    
     
     # freeze the specified layers of the pre-trained model
     retrain_flag = False
