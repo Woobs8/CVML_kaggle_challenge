@@ -55,7 +55,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
             # freeze all layers, only the classifier is trained 
             for layer in final_model.layers:
                 layer.trainable = False
-                if layer.name == "softmax":
+                if layer.name == "clf_softmax":
                     layer.trainable = True
         else:
             # Get The VGG19 Model
