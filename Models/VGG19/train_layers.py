@@ -15,11 +15,11 @@ from Tools.DataReader import load_labels
 from keras.callbacks import ModelCheckpoint, LearningRateScheduler, TensorBoard, EarlyStopping
 from keras import backend as K
 from keras.layers import Lambda, Input
-
+from keras.callbacks import History 
 
 
 def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, lr, batch_size, start_layer, stop_layer, lr_sched=None, input_model=None, print_model_summary_only=False,use_resize=False):
-    # Load labels
+    # load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
     
@@ -34,65 +34,57 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
     cat_train_labels = to_categorical(training_labels)
     cat_val_labels = to_categorical(validation_labels)
 
+    # no input model specified - generate new model
     if input_model is None:
-
+        # add resize layer to fit images for VGG19 input layer (224x224)
         if use_resize:
             inp = Input(shape=(None, None, 3),name='image_input')
             inp_resize = Lambda(lambda image: K.tf.image.resize_images(image, (224, 224), K.tf.image.ResizeMethod.BICUBIC),name='image_resize')(inp)
             resize = Model(inp,inp_resize)
             
-            # Get The VGG19 Model
+            # get The VGG19 Model
             model = VGG19(input_tensor=resize.output, weights = "imagenet", include_top=True)
 
             # Throw away softmax
             model.layers.pop()
             
-            # Create The Classifier     
+            # create The Classifier     
             predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(model.layers[-1].output)
             final_model = Model(input = model.input, output = predictions)
-
-            # freeze all layers, only the classifier is trained 
-            for layer in final_model.layers:
-                layer.trainable = False
+        # use original image sizes - redefine model classification layers
         else:
-            # Get The VGG19 Model
+            # get The VGG19 Model
             model = VGG19(weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
-            # Create The Classifier     
+            # create The Classifier     
             clf = layers.Flatten()(model.output)
-            clf = layers.Dense(4096, activation="relu",name="clf_dense_1")(clf)
-            clf = layers.Dropout(0.5, name="clf_dropout")(clf)
-            clf = layers.Dense(4096, activation="relu", name="clf_dense_2")(clf)
+            clf = layers.Dense(4096, activation="relu",name="fc1")(clf)
+            clf = layers.Dense(4096, activation="relu", name="fc2")(clf)
             predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(clf)
             
             final_model = Model(input = model.input, output = predictions)
-
+    # load input model
     else:
         final_model = load_model(input_model)
     
-    # freeze all layers, so that no unexpected layers are trained
+    # freeze all layers, so the trainable layers are controlled
     for layer in final_model.layers:
         layer.trainable = False
-
-    # Print model summary and stop if specified
-    final_model.summary()
-    if print_model_summary_only:
-        return 
-
+    
     # define model callbacks 
     checkpoint = ModelCheckpoint(filepath=output_dir+"/checkpoint.h5", monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', period=1)
     early = EarlyStopping(monitor='val_acc', min_delta=0.01, patience=3, verbose=1, mode='auto')
     tb_path = os.path.join(output_dir,'Graph')
     tensorboard = TensorBoard(log_dir=tb_path, histogram_freq=0, write_graph=True, write_images=True, write_grads=True)
+    history = History()
     
-    # Use Learn rate scheduler if specified
+    # use Learn rate scheduler if specified
     if not lr_sched is None:
         lrate = LearningRateScheduler(step_decay(lr, lr_sched[0], lr_sched[1]))
-        callback_list = [checkpoint, early, tensorboard, lrate]
+        callback_list = [checkpoint, early, tensorboard, lrate, history]
     else:
-        callback_list = [checkpoint, early, tensorboard]
+        callback_list = [checkpoint, early, tensorboard, history]
     
-
-    # Data generators
+    # data generators
     train_generator = DataGenerator(path_to_images=train_data,
                                     labels=cat_train_labels, 
                                     batch_size=batch_size)
@@ -101,49 +93,42 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
                                     labels=cat_val_labels, 
                                     batch_size=batch_size)
     
-    # Get list of layers to train recursively
-    train_layer_list = []
-    train_flag = False
-    for layer in final_model.layers:
-        if layer.name == stop_layer:
-            train_flag = True
-        
-        if train_flag:
-            if layer.count_params() > 0:
-                train_layer_list.append(layer.name)
-            
-            if layer.name == start_layer:
-                break
+    # set trainable layers
+    start_layer_idx = [i for i,j in enumerate(final_model.layers) if j.name==start_layer][0]
+    stop_layer_idx = [i for i,j in enumerate(final_model.layers) if j.name==stop_layer][0]
     
-    # Reverse the list
-    train_layer_list = train_layer_list[::-1]
-
-    # Recursive training of the network.
-    for idx, retrain_now in enumerate(train_layer_list):      
-        for layer in final_model.layers:
-            if layer.name == retrain_now:  
-                layer.trainable = True
-            else:
-                layer.trainable = False
+    for layer in final_model.layers[stop_layer_idx:start_layer_idx+1]:
+        layer.trainable = True
             
-        # compile the model 
-        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
+    # compile the model 
+    final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
 
-        # fit model
-        final_model.fit_generator(train_generator,
-                            steps_per_epoch = len(training_labels)/batch_size,
-                            epochs = max_epochs,
-                            validation_data = val_generator,
-                            validation_steps = len(validation_labels)/batch_size,
-                            callbacks = callback_list,
-                            workers=2,
-                            use_multiprocessing=False)
-        
-        print("Finished training for layer: %s" %(retrain_now), flush=True)
+    # print model summary and stop if specified
+    final_model.summary()
+    if print_model_summary_only:
+        return 
 
+    # fit model
+    final_model.fit_generator(train_generator,
+                        steps_per_epoch = len(training_labels)/batch_size,
+                        epochs = max_epochs,
+                        validation_data = val_generator,
+                        validation_steps = len(validation_labels)/batch_size,
+                        callbacks = callback_list,
+                        workers=2,
+                        use_multiprocessing=False)
+    
+    print("Finished training layers: %s - %s" % (start_layer,stop_layer), flush=True)
 
-    # save final model
-    final_model.save(output_dir + "/recursive_clf_vgg19.h5")
+    # print summary
+    with open(output_dir + '/' + 'summary.txt','w') as fp:
+        fp.write('Max epochs: '+ str(max_epochs)+'\n')
+        fp.write('lr: '+ str(lr)+'\n')
+        fp.write('Batch size: '+ str(batch_size)+'\n')
+        fp.write('Starting layer: ' + str(start_layer)+'\n')
+        fp.write('Stopping layer: ' + str(stop_layer)+'\n')
+        fp.write('Training accuracy: ' + str(history.history['acc'])+'\n')
+        fp.write('Validation accuracy: ' + str(history.history['val_acc'])+'\n')
     
 
 if __name__ == "__main__":
@@ -204,7 +189,7 @@ if __name__ == "__main__":
                         default=32)
                         
     parser.add_argument('-input_model', 
-                        help='Path to .h5 model to train last layers. First layer of the top layers to train must be named clf_dense_1',
+                        help='Path to .h5 model to train last layers',
                         default=None)
 
     parser.add_argument('-summary_only', 
@@ -212,7 +197,7 @@ if __name__ == "__main__":
                         action="store_true")
     
     parser.add_argument('-use_resize', 
-                        help='Use resizing to 224*224*3',
+                        help='Resize images to 224*224*3',
                         action="store_true")
 
     args = parser.parse_args()
