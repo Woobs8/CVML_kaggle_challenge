@@ -33,7 +33,7 @@ if __name__ == "__main__":
                                     description='''Predict samples using a trained SVM and store the predictions in the the specified file''')
     
     parser.add_argument('model', 
-                        help='path to test data vector', nargs='?', default='../../Data/Test/testVectors.txt')
+                        help='path to model')
 
     parser.add_argument('output', 
                         help='output directory where results are stored')
