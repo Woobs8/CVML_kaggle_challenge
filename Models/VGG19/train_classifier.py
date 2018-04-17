@@ -17,7 +17,7 @@ from keras import backend as K
 
 
 
-def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, init_lr, clf_dropout, batch_size, lr_sched=None,input_model=None,compile_model=False,use_resize=False):
+def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, init_lr, clf_dropout, batch_size, print_model_summary_only=False, lr_sched=None,input_model=None,compile_model=False,use_resize=False):
     # Load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
@@ -76,7 +76,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
         layer.trainable = False
 
     # Print model summary and stop if specified
-    print(final_model.summary())
+    final_model.summary()  
     if print_model_summary_only:
         return 
 
@@ -181,6 +181,10 @@ if __name__ == "__main__":
     parser.add_argument('-use_resize', 
                         help='Use resizing to 224*224*3',
                         action="store_true")
+    
+    parser.add_argument('-summary_only', 
+                    help='Stop Script after prining model summary (ie. no training)',
+                    action="store_true")
 
     args = parser.parse_args()
     
@@ -196,4 +200,5 @@ if __name__ == "__main__":
                         lr_sched=args.lr_sched,
                         input_model=args.input_model,
                         compile_model=args.compile,
-                        use_resize=args.use_resize)
+                        use_resize=args.use_resize,
+                        print_model_summary_only=args.summary_only)
