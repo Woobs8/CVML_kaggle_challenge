@@ -41,7 +41,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
     if input_model is None:
         if use_resize:
             inp = Input(shape=(None, None, 3),name='image_input')
-            inp_resize = Lambda(lambda image: lambda_(image),name='image_resize')(inp)
+            inp_resize = Lambda(lambda image: lambda_(image), output_shape=(224, 224, 3),name='image_resize')(inp)
             resize = Model(inp,inp_resize)
 
             # Get The VGG19 Model
