@@ -44,18 +44,29 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
             
             # get the VGG19 Model
             model = VGG19(input_tensor=resize.output, weights = "imagenet", include_top=True)
-            
+
             """ # Dropout is data enrichment (equivalent to 2-5 times the dataset based on Alexandros)
                 # Dropout should only be used during training (NOT validation and testing -> input to ouput should be deterministic)
                 # If dropout is used during training the output values of the dropout layer should be multiplied with 1/(dropout_%)
                 # This is due dropout not being used in validation and testing but we want the same energy to come into the FC layer after dropout
                 # This should be exactly how keras implemented it from the start! https://github.com/keras-team/keras/issues/3305"""
-            dropout = layers.Dropout(clf_dropout, name='dropout1')(model.layers['fc1'].output)
-            model.layers['fc2'].input_tensor = dropout.output
             
-            # create the classifier     
-            predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(model.layers['fc1'].output)
-            final_model = Model(input = model.input, output = predictions)
+            # Get the fully connected layers
+            fc1 = model.get_layer('fc1')
+            fc2 = model.get_layer('fc2')
+
+            # Create the dropout layer and the classifier 
+            dropout = layers.Dropout(clf_dropout, name='dropout1')  
+            clf = layers.Dense(num_classes, activation="softmax",name="clf_softmax")
+
+            # Reconnect the layers
+            x = dropout(fc1.output)
+            x = fc2(x)
+            predictions = clf(x)
+
+            # Create the final model
+            final_model = Model(inputs = model.input, outputs = predictions)
+
         # use original image sizes - redefine model classification layers
         else:
             # get The VGG19 Model
