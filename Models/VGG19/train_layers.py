@@ -42,14 +42,13 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
             inp_resize = Lambda(lambda image: K.tf.image.resize_images(image, (224, 224), K.tf.image.ResizeMethod.BICUBIC),name='image_resize')(inp)
             resize = Model(inp,inp_resize)
             
-            # get The VGG19 Model
+            # get the VGG19 Model
             model = VGG19(input_tensor=resize.output, weights = "imagenet", include_top=True)
-
-            # Throw away softmax
-            model.layers.pop()
+            dropout = layers.Dropout(0.5, name='dropout1')(model.layers['fc1'].output)
+            model.layers['fc2'].input_tensor = dropout.output
             
-            # create The Classifier     
-            predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(model.layers[-1].output)
+            # create the classifier     
+            predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(model.layers['fc1'].output)
             final_model = Model(input = model.input, output = predictions)
         # use original image sizes - redefine model classification layers
         else:
@@ -58,12 +57,14 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
             # create The Classifier     
             clf = layers.Flatten()(model.output)
             clf = layers.Dense(4096, activation="relu",name="fc1")(clf)
+            clf = layers.Dropout(0.5, name="dropout1")(clf)
             clf = layers.Dense(4096, activation="relu", name="fc2")(clf)
             predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(clf)
             
             final_model = Model(input = model.input, output = predictions)
     # load input model
     else:
+        print("Using existing model: {}".format(input_model))
         final_model = load_model(input_model)
     
     # freeze all layers, so the trainable layers are controlled
@@ -118,7 +119,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
                         workers=2,
                         use_multiprocessing=False)
     
-    print("Finished training layers: %s - %s" % (start_layer,stop_layer), flush=True)
+    print("Finished training layers: {} - {}".format(start_layer,stop_layer), flush=True)
 
     # print summary
     with open(output_dir + '/' + 'summary.txt','w') as fp:
