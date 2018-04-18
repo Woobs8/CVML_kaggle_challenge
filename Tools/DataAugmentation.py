@@ -41,7 +41,7 @@ def augment_data(path_to_images, path_to_labels, save_image_path, number_images_
 
     # convert from int to float
     X_train = X_train.astype('float32')
-    
+
     # fit parameters from data
     datagen.fit(X_train)
     
@@ -72,7 +72,7 @@ def augment_data(path_to_images, path_to_labels, save_image_path, number_images_
     img_name_list = [os.path.split(x)[1][:-4] for x in img_list]
     new_lbls= create_labels(img_name_list)+label_offset
     np.save(lbls_path_and_file_name,new_lbls)
-   
+
 
 def create_labels(img_name_list):
     img_name_list = [os.path.split(x)[1][:-4] for x in img_name_list]
@@ -90,7 +90,37 @@ def resize_images(image_data, target_size, interp='cubic'):
         print(string_,end='\r',flush=True)
     return resized_data
 
+
+# Attempt at homebrewing a ZCA whitening transform
+# https://stackoverflow.com/questions/41635737/is-this-the-correct-way-of-whitening-an-image-in-python
+def zca_whitening(X, epsilon=1e-6, zero_centered=True):
+    num_samples, h, w, c = X.shape
     
+    # zero center data if not already zero-centered
+    if not zero_centered:
+        X = X - X.mean(axis=0)
+
+    # reshape data into single feature vectors (N,h*w*c)
+    X = X.reshape(num_samples, h*w*c)
+    
+    # compute the covariance of the image data
+    cov = np.cov(X, rowvar=True)   # cov is (N, N)
+
+    # apply singular value decomposition
+    U,S,V = np.linalg.svd(cov)     # U is (N, N), S is (N,)
+
+    # build the ZCA matrix
+    zca_matrix = np.dot(U, np.dot(np.diag(1.0/np.sqrt(S + epsilon)), U.T))      # zca_matrix is (N,N)
+    
+    # apply zca transform
+    zca = np.dot(zca_matrix, X)     # zca is (N, h*w*c)
+    
+    # reshape zca transform back into image shape (N,h,w,c)
+    zca = zca.reshape(num_samples, h, w, c)
+    
+    return zca
+    
+
 if __name__ == '__main__':
     import sys
     from Tools.DataReader import load_labels
