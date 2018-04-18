@@ -17,8 +17,7 @@ from keras import backend as K
 from keras.layers import Lambda, Input
 from keras.callbacks import History 
 
-
-def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, lr, batch_size, start_layer, stop_layer, lr_sched=None, input_model=None, print_model_summary_only=False,use_resize=False):
+def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, lr, batch_size, start_layer, stop_layer, early_stop=[3,0.01], clf_dropout=0.5, lr_sched=None, input_model=None, print_model_summary_only=False, use_resize=False, restart=False):
     # load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
@@ -36,6 +35,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
 
     # no input model specified - generate new model
     if input_model is None:
+        # If we dont use resize we might want to investigate using SSP to flatten the output of the last conv layer        
         # add resize layer to fit images for VGG19 input layer (224x224)
         if use_resize:
             inp = Input(shape=(None, None, 3),name='image_input')
@@ -44,7 +44,13 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
             
             # get the VGG19 Model
             model = VGG19(input_tensor=resize.output, weights = "imagenet", include_top=True)
-            dropout = layers.Dropout(0.5, name='dropout1')(model.layers['fc1'].output)
+            
+            """ # Dropout is data enrichment (equivalent to 2-5 times the dataset based on Alexandros)
+                # Dropout should only be used during training (NOT validation and testing -> input to ouput should be deterministic)
+                # If dropout is used during training the output values of the dropout layer should be multiplied with 1/(dropout_%)
+                # This is due dropout not being used in validation and testing but we want the same energy to come into the FC layer after dropout
+                # This should be exactly how keras implemented it from the start! https://github.com/keras-team/keras/issues/3305"""
+            dropout = layers.Dropout(clf_dropout, name='dropout1')(model.layers['fc1'].output)
             model.layers['fc2'].input_tensor = dropout.output
             
             # create the classifier     
@@ -57,7 +63,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
             # create The Classifier     
             clf = layers.Flatten()(model.output)
             clf = layers.Dense(4096, activation="relu",name="fc1")(clf)
-            clf = layers.Dropout(0.5, name="dropout1")(clf)
+            clf = layers.Dropout(clf_dropout, name="dropout1")(clf)
             clf = layers.Dense(4096, activation="relu", name="fc2")(clf)
             predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(clf)
             
@@ -66,14 +72,15 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
     else:
         print("Using existing model: {}".format(input_model))
         final_model = load_model(input_model)
-    
-    # freeze all layers, so the trainable layers are controlled
-    for layer in final_model.layers:
-        layer.trainable = False
-    
+
+    if not restart:    
+        # freeze all layers, so the trainable layers are controlled
+        for layer in final_model.layers:
+            layer.trainable = False
+        
     # define model callbacks 
     checkpoint = ModelCheckpoint(filepath=output_dir+"/checkpoint.h5", monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', period=1)
-    early = EarlyStopping(monitor='val_acc', min_delta=0.01, patience=3, verbose=1, mode='auto')
+    early = EarlyStopping(monitor='val_acc', min_delta=early_stop[1], patience=early_stop[0], verbose=1, mode='auto')
     tb_path = os.path.join(output_dir,'Graph')
     tensorboard = TensorBoard(log_dir=tb_path, histogram_freq=0, write_graph=True, write_images=True, write_grads=True)
     history = History()
@@ -93,16 +100,16 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
     val_generator = DataGenerator(  path_to_images=val_data,
                                     labels=cat_val_labels, 
                                     batch_size=batch_size)
-    
-    # set trainable layers
-    start_layer_idx = [i for i,j in enumerate(final_model.layers) if j.name==start_layer][0]
-    stop_layer_idx = [i for i,j in enumerate(final_model.layers) if j.name==stop_layer][0]
-    
-    for layer in final_model.layers[stop_layer_idx:start_layer_idx+1]:
-        layer.trainable = True
-            
-    # compile the model 
-    final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
+    if not restart:
+        # set trainable layers
+        start_layer_idx = [i for i,j in enumerate(final_model.layers) if j.name==start_layer][0]
+        stop_layer_idx = [i for i,j in enumerate(final_model.layers) if j.name==stop_layer][0]
+        
+        for layer in final_model.layers[stop_layer_idx:start_layer_idx+1]:
+            layer.trainable = True
+                
+        # compile the model 
+        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
 
     # print model summary and stop if specified
     final_model.summary()
@@ -131,6 +138,8 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
         fp.write('Training accuracy: ' + str(history.history['acc'])+'\n')
         fp.write('Validation accuracy: ' + str(history.history['val_acc'])+'\n')
     
+def str2bool(v):
+  return v.lower() in ("yes", "true", "t", "1")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='Fine-tune pre-trained network recursively',
@@ -182,8 +191,20 @@ if __name__ == "__main__":
                         help='Parameters for learning rate schedule (drop, epochs between drop)',
                         nargs=2,
                         type=float,
-                        required=False)        
-    
+                        required=False) 
+
+    parser.add_argument('-early_stop',
+                        help='Parameters for early stopping (patience, decimal change in val_acc)',
+                        nargs=2,
+                        type=float,
+                        default=[3,0.01],
+                        required=False) 
+
+    parser.add_argument('-dropout', 
+                        help='Dropout rate to use',
+                        type=float,
+                        default=0.5)
+
     parser.add_argument('-batch_size', 
                         help='Batch size to use when training',
                         type=int,
@@ -192,14 +213,21 @@ if __name__ == "__main__":
     parser.add_argument('-input_model', 
                         help='Path to .h5 model to train last layers',
                         default=None)
+    
+    parser.add_argument('-restart', 
+                        help='Make sure that the model use loaded learn rate and architecture (model wont be compiled)',
+                        type=str2bool,
+                        default=False)
 
+    parser.add_argument('-use_resize', 
+                        help='Use resizing to 224*224*3',
+                        type=str2bool,
+                        default=False)
+    
     parser.add_argument('-summary_only', 
                         help='Stop Script after prining model summary (ie. no training)',
-                        action="store_true")
-    
-    parser.add_argument('-use_resize', 
-                        help='Resize images to 224*224*3',
-                        action="store_true")
+                        type=str2bool,
+                        default=False)
 
     args = parser.parse_args()
     
@@ -215,5 +243,8 @@ if __name__ == "__main__":
                         input_model=args.input_model,
                         start_layer=args.start_layer,
                         stop_layer=args.stop_layer,
+                        clf_dropout=args.dropout,
                         print_model_summary_only=args.summary_only,
-                        use_resize=args.use_resize)
+                        use_resize=args.use_resize,
+                        restart=args.restart,
+                        early_stop=args.early_stop)
