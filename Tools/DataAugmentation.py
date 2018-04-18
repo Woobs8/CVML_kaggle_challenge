@@ -99,24 +99,24 @@ if __name__ == '__main__':
                                     description='''Program augments images and saves them on the local drive, in a specified folder.
                                                 The specified number of images per class will approximatly be created
                                                 Images are saved in the specified folder''')
-    parser.add_argument('-path_to_images', 
+    parser.add_argument('-input_data', 
                         help='Input path to images to be augmented',
-                        default=None)
+                        default='Data/Train/TrainImages')
     
-    parser.add_argument('-path_to_labels', 
+    parser.add_argument('-input_label', 
                         help='Input path to images to be separated into classes',
-                        default=None)
+                        default='Data/Train/trainLbls.txt')
     
-    parser.add_argument('-dir_path_to_save_images', 
-                        help='Input path to folder where the images should be saved',
-                        default=None)
+    parser.add_argument('-output_dir', 
+                        help='Output path to folder where the images should be saved',
+                        required=True)
     
-    parser.add_argument('-number_images_per_class',
+    parser.add_argument('-images_per_class',
                         help='Total number of images that will be within each class (approximately)',
                         type=int,
-                        default=0)
+                        required=True)
 
-    parser.add_argument('-lbls_path_and_file_name',
+    parser.add_argument('-output_lbls',
                         help='File name of augmented data labels numpy file',
                         default="Lbls")
 
@@ -133,13 +133,10 @@ if __name__ == '__main__':
     #  Parse Arguments
     args = parser.parse_args()
 
-    if (args.path_to_images or args.path_to_labels or args.dir_path_to_save_images or args.number_images_per_class) == None:
-        raise ValueError("Didnt receive all arguments needed")
-    # Path is a data file
-    if os.path.exists(args.path_to_images):
-        if not os.path.exists(args.dir_path_to_save_images):
-            os.makedirs(args.dir_path_to_save_images )
-        augment_data(args.path_to_images, args.path_to_labels, args.dir_path_to_save_images, args.number_images_per_class,args.lbls_path_and_file_name, target_size=args.target_size, resize_only=args.resize_only)
+    if os.path.exists(args.input_data):
+        if not os.path.exists(args.output_dir):
+            os.makedirs(args.output_dir )
+        augment_data(args.input_data, args.input_label, args.output_dir, args.images_per_class,args.output_lbls, target_size=args.target_size, resize_only=args.resize_only)
     else:
-        print("Error: file '" + args.path_to_images + "' not found")
+        print("Error: file '" + args.input_data + "' not found")
         exit(1)
