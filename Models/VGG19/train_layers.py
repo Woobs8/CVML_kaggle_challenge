@@ -142,8 +142,8 @@ def str2bool(v):
   return v.lower() in ("yes", "true", "t", "1")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='Fine-tune pre-trained network recursively',
-                                    description='''Recursively train specified layers of pretrained convolutional neural network and store the output to the specified directory''')
+    parser = argparse.ArgumentParser(prog='Train specific layers of a VGG19 keras model',
+                                    description='''Train specific layers of a VGG19 keras model. The model may be trained from scratch, pretrained or an existing model saved in an external file''')
 
     parser.add_argument('train_data', 
                         help='path to directory containing training images', 
