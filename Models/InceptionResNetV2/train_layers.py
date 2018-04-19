@@ -14,10 +14,10 @@ from Tools.DataGenerator import DataGenerator
 from Tools.DataReader import load_labels
 from keras.callbacks import ModelCheckpoint, LearningRateScheduler, TensorBoard, EarlyStopping
 from keras import backend as K
-from keras.layers import Lambda, Input
+from keras.layers import Lambda, Input, GlobalMaxPooling2D
 from keras.callbacks import History 
 
-def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, lr, batch_size, start_layer, stop_layer, early_stop=[3,0.01], clf_dropout=0.5, lr_sched=None, input_model=None, print_model_summary_only=False, use_resize=False, restart=False):
+def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, lr, batch_size, start_layer, stop_layer, early_stop=[3,0.01], clf_dropout=0.2, lr_sched=None, input_model=None, print_model_summary_only=False, use_resize=False, restart=False):
     # load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
@@ -35,39 +35,26 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
 
     # no input model specified - generate new model
     if input_model is None:
-        # If we dont use resize we might want to investigate using SSP to flatten the output of the last conv layer        
         # add resize layer to fit images for InceptionResNetV2 input layer (299x299)
         if use_resize:
             inp = Input(shape=(None, None, 3),name='image_input')
             inp_resize = Lambda(lambda image: K.tf.image.resize_images(image, (299, 299), K.tf.image.ResizeMethod.BICUBIC),name='image_resize')(inp)
             resize = Model(inp,inp_resize)
             
-            # get the InceptionResNetV2 Model
-            model = InceptionResNetV2(input_tensor=resize.output, weights = "imagenet", include_top=True)
-            
-            """ # Dropout is data enrichment (equivalent to 2-5 times the dataset based on Alexandros)
-                # Dropout should only be used during training (NOT validation and testing -> input to ouput should be deterministic)
-                # If dropout is used during training the output values of the dropout layer should be multiplied with 1/(dropout_%)
-                # This is due dropout not being used in validation and testing but we want the same energy to come into the FC layer after dropout
-                # This should be exactly how keras implemented it from the start! https://github.com/keras-team/keras/issues/3305"""
-            dropout = layers.Dropout(clf_dropout, name='dropout1')(model.layers['fc1'].output)
-            model.layers['fc2'].input_tensor = dropout.output
-            
-            # create the classifier     
-            predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(model.layers['fc1'].output)
-            final_model = Model(input = model.input, output = predictions)
-        # use original image sizes - redefine model classification layers
+            # get the InceptionResNetV2 model and add it on top of the resize layer
+            model = InceptionResNetV2(input_tensor=resize.output, weights = "imagenet", include_top=False) 
+        # use original image sizes
         else:
-            # get The InceptionResNetV2 Model
+            # get the InceptionResNetV2 model
             model = InceptionResNetV2(weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
-            # create The Classifier     
-            clf = layers.Flatten()(model.output)
-            clf = layers.Dense(4096, activation="relu",name="fc1")(clf)
-            clf = layers.Dropout(clf_dropout, name="dropout1")(clf)
-            clf = layers.Dense(4096, activation="relu", name="fc2")(clf)
-            predictions = layers.Dense(num_classes, activation="softmax",name="clf_softmax")(clf)
-            
-            final_model = Model(input = model.input, output = predictions)
+        
+        # create classifier - InceptionResNetV2 only uses an average pooling layer and a softmax classifier on top
+        # Some articles mention that a dropout layer of 0.2 is used between the pooling layer and the softmax layer
+        avg_pool = layers.GlobalMaxPooling2D(name='avg_pool')(model.output)
+        dropout = layers.Dropout(clf_dropout,name='dropout1')(avg_pool)
+        predictions = layers.Dense(num_classes, activation="softmax", name='predictions')(dropout)
+        final_model = Model(input = model.input, output = predictions)
+    
     # load input model
     else:
         print("Using existing model: {}".format(input_model))
@@ -169,13 +156,17 @@ if __name__ == "__main__":
                         help='output directory where results are stored',
                         required=True)
 
+    # only allow model to train whole inception "blocks"
+    allowed_layers = ['predictions','mixed_7a','mixed_6a','mixed_5b','conv2d_1']
     parser.add_argument('-stop_layer', 
-                        help='Layer to start recursive training from (layer is included in training)',
-                        required=True)
+                        help='Layer to stop training from (layer is included in training). Limited to beginning of inception blocks',
+                        required=True,
+                        choices=allowed_layers)
 
     parser.add_argument('-start_layer', 
-                        help='Layer to stop recursive training from (layer is included in training)',
-                        required=True)  
+                        help='Layer to start training from (layer is included in training). Limited to beginning of inception blocks',
+                        required=True,
+                        choices=allowed_layers)  
 
     parser.add_argument('-epochs', 
                         help='Max number of epochs to run',
@@ -203,7 +194,7 @@ if __name__ == "__main__":
     parser.add_argument('-dropout', 
                         help='Dropout rate to use',
                         type=float,
-                        default=0.5)
+                        default=0.2)
 
     parser.add_argument('-batch_size', 
                         help='Batch size to use when training',
@@ -220,7 +211,7 @@ if __name__ == "__main__":
                         default=False)
 
     parser.add_argument('-use_resize', 
-                        help='Use resizing to 224*224*3',
+                        help='Use resizing to 299*299*3',
                         type=str2bool,
                         default=False)
     
