@@ -50,7 +50,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
         
         # create classifier - InceptionResNetV2 only uses an average pooling layer and a softmax classifier on top
         # Some articles mention that a dropout layer of 0.2 is used between the pooling layer and the softmax layer
-        avg_pool = layers.GlobalMaxPooling2D(name='avg_pool')(model.output)
+        avg_pool = layers.GlobalAveragePooling2D(name='avg_pool')(model.output)
         dropout = layers.Dropout(clf_dropout,name='dropout1')(avg_pool)
         predictions = layers.Dense(num_classes, activation="softmax", name='predictions')(dropout)
         final_model = Model(input = model.input, output = predictions)
