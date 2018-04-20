@@ -93,8 +93,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
     checkpoint = ModelCheckpoint(filepath=output_dir+"/checkpoint.h5", monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', period=1)
     early = EarlyStopping(monitor='val_acc', min_delta=early_stop[1], patience=early_stop[0], verbose=1, mode='auto')
     tb_path = os.path.join(output_dir,'Graph')
-    #tensorboard = TensorBoard(log_dir=tb_path, histogram_freq=0, write_graph=True, write_images=True, write_grads=True)
-    tensorboard = TensorBoard(log_dir=tb_path, histogram_freq=0, batch_size=batch_size, write_graph=True, write_grads=True, write_images=True, embeddings_freq=1, embeddings_layer_names=None, embeddings_metadata=None)
+    tensorboard = TensorBoard(log_dir=tb_path, histogram_freq=0, write_graph=True, write_grads=True,batch_size=batch_size, write_images=True, embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None)
     history = History()
     
     # use Learn rate scheduler if specified
