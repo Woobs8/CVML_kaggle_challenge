@@ -94,7 +94,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
     early = EarlyStopping(monitor='val_acc', min_delta=early_stop[1], patience=early_stop[0], verbose=1, mode='auto')
     tb_path = os.path.join(output_dir,'Graph')
     #tensorboard = TensorBoard(log_dir=tb_path, histogram_freq=0, write_graph=True, write_images=True, write_grads=True)
-    keras.callbacks.TensorBoard(log_dir=tb_path, histogram_freq=0, batch_size=batch_size, write_graph=True, write_grads=True, write_images=True, embeddings_freq=1, embeddings_layer_names=None, embeddings_metadata=None)
+    tensorboard = TensorBoard(log_dir=tb_path, histogram_freq=0, batch_size=batch_size, write_graph=True, write_grads=True, write_images=True, embeddings_freq=1, embeddings_layer_names=None, embeddings_metadata=None)
     history = History()
     
     # use Learn rate scheduler if specified
