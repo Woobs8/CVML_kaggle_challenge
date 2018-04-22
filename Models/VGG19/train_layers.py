@@ -134,7 +134,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
                         validation_data = val_generator,
                         validation_steps = len(validation_labels)/batch_size,
                         callbacks = callback_list,
-                        workers=3,
+                        workers=1, # Only use one worker or the batches will be dublicates of each other 
                         use_multiprocessing=True)
     
     print("Finished training layers: {} - {}".format(start_layer,stop_layer), flush=True)
