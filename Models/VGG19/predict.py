@@ -168,7 +168,7 @@ if __name__ == "__main__":
                         help='how instances are used to aid classification',
                         nargs=1,
                         choices=['average','highest'],
-                        default='highest')
+                        default=['highest'])
     
     args = parser.parse_args()
     
