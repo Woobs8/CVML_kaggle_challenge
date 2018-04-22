@@ -74,6 +74,61 @@ def augment_data(path_to_images, path_to_labels, save_image_path, number_images_
     np.save(lbls_path_and_file_name,new_lbls)
 
 
+def augment_test_data(path_to_images, save_image_path, number_samples_per_image, target_size=None, resize_only=False):
+    """ """
+    # Get Image List
+    img_list = create_image_lists(path_to_images)
+    num_samples = len(img_list)
+    img_name_list = [os.path.split(x)[1][:-4] for x in img_list]
+
+    # load image data
+    X_train = image_reader(path_to_images)
+
+    # resize images to target size
+    if not target_size is None:
+        X_train = resize_images(X_train,(target_size[0],target_size[1]))
+        
+        # return now if only image resizing is required
+        if resize_only:
+            for idx, image in enumerate(X_train):
+                im_path = os.path.join(save_image_path,'Image'+str(idx+1)+'.jpg')
+                imsave(im_path, image)   
+            return     
+
+    # Data Augmentation To Use
+    test_datagen = ImageDataGenerator(
+        rescale = 1./255,
+        horizontal_flip = True,
+        vertical_flip=True,
+        fill_mode = "nearest",
+        rotation_range=50,
+        featurewise_center=True,
+        data_format="channels_last")
+
+    # convert from int to float
+    X_train = X_train.astype('float32')
+
+    # fit parameters from data
+    test_datagen.fit(X_train)
+
+    print("Starting Data Augmentation \n")
+    for idx, sample in enumerate(X_train):
+        created_images=0
+        sample = np.array([sample,sample])
+        for X_batch in test_datagen.flow(sample,
+                                        batch_size=1,
+                                        save_prefix="Image_"+str(idx+1),
+                                        save_format="jpeg",
+                                        save_to_dir=save_image_path,
+                                        shuffle=False):
+            num, h, w, c = X_batch.shape
+            created_images += num
+            if created_images >= number_samples_per_image:
+                break
+        string_ = "Augmenting images " + str(idx+1) + "/" + str(num_samples) + "       "
+        print(string_,end='\r',flush=True)
+
+
 def create_labels(img_name_list):
     img_name_list = [os.path.split(x)[1][:-4] for x in img_name_list]
     labels = np.array([ int(img_lbl.split("_")[1][1:]) for img_lbl in img_name_list])
@@ -129,6 +184,7 @@ if __name__ == '__main__':
                                     description='''Program augments images and saves them on the local drive, in a specified folder.
                                                 The specified number of images per class will approximatly be created
                                                 Images are saved in the specified folder''')
+    # train data augmentation
     parser.add_argument('-input_data', 
                         help='Input path to images to be augmented',
                         default='Data/Train/TrainImages')
@@ -144,7 +200,7 @@ if __name__ == '__main__':
     parser.add_argument('-images_per_class',
                         help='Total number of images that will be within each class (approximately)',
                         type=int,
-                        required=True)
+                        default=2000)
 
     parser.add_argument('-output_lbls',
                         help='File name of augmented data labels numpy file',
@@ -158,7 +214,17 @@ if __name__ == '__main__':
 
     parser.add_argument('-resize_only', 
                         help='Only perform image resizing - no other augmentation',
-                        action="store_true")  
+                        action="store_true")
+
+    # test data augmentation
+    parser.add_argument('-test_data', 
+                        help='Data to be augmented is test data',
+                        action="store_true")
+
+    parser.add_argument('-images_per_sample',
+                    help='Number of augmented samples to be created for each test image',
+                    type=int,
+                    default=4)
 
     #  Parse Arguments
     args = parser.parse_args()
@@ -166,7 +232,11 @@ if __name__ == '__main__':
     if os.path.exists(args.input_data):
         if not os.path.exists(args.output_dir):
             os.makedirs(args.output_dir )
-        augment_data(args.input_data, args.input_label, args.output_dir, args.images_per_class,args.output_lbls, target_size=args.target_size, resize_only=args.resize_only)
+        
+        if args.test_data:
+            augment_test_data(args.input_data, args.output_dir, args.images_per_sample, target_size=args.target_size, resize_only=args.resize_only)
+        else:
+            augment_data(args.input_data, args.input_label, args.output_dir, args.images_per_class,args.output_lbls, target_size=args.target_size, resize_only=args.resize_only)
     else:
         print("Error: file '" + args.input_data + "' not found")
         exit(1)
