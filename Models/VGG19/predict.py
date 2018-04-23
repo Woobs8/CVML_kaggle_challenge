@@ -71,8 +71,8 @@ def instance_predict(test_data, model_path, output_dir, decision):
     write_predictions_file(prediction,output_dir)
 
 
-def aug_instance_predict(test_data, aug_test_data, model_path, num_aug, output_dir,decision):
-    print("Running augmented instanced-based predictions")
+def aug_instance_predict(test_data, aug_test_data, model_path, output_dir, decision):
+    print("Running augmented instance-based predictions")
     # Load data
     X_test = image_reader(test_data) * (1./255)
     num_test, h, w, c = X_test.shape
@@ -106,29 +106,49 @@ def aug_instance_predict(test_data, aug_test_data, model_path, num_aug, output_d
     prob_aug_test = final_model.predict(X_aug_test,verbose=1)
 
     prediction = np.zeros(num_test)
-    if decision == 'average':
-        for idx, pred in enumerate(prob_test):
-            sum_aug_pred = np.sum(prob_aug_test[idx*num_aug:((idx*num_aug)+num_aug)])
-            agg_prob = np.add(pred,sum_aug_pred)
-            prob = agg_prob / (num_aug+1)
+    aug_prob = np.zeros((num_test,29))
+    old_aug_idx = 0
+    new_aug_idx = 0
+    for idx, pred in enumerate(prob_test):
+        num_aug = aug_img_count[idx]
+        new_aug_idx += num_aug
+        aug_pred = prob_aug_test[int(old_aug_idx):int(new_aug_idx)]
+        old_aug_idx = new_aug_idx
+
+        if decision == 'average':
+            sum_aug_pred = np.sum(aug_pred)
+            aug_prob[idx] = np.add(pred,sum_aug_pred)
                 
-            # prediction = highest probability (+offset since labels may not start at 0)
-            prediction[idx] = np.argmax(prob, axis=0) + 1
-    elif decision == 'highest':
-        cur_idx = 0
-        old_idx = 0
-        for idx, img in enumerate(zip(prob_test,aug_img_count)):
-            cur_idx = old_idx + img[1]
-            pred = img[0]
-            aug_pred = prob_aug_test[int(old_idx):int(cur_idx)]
+        elif decision == 'highest':
             pred = pred.reshape(1,29)
             agg_preds = np.append(aug_pred,pred,axis=0)
-            max_vals = np.empty(int(img[1]+1),dtype='int64')
-            max_idcs = np.argmax(agg_preds, axis=1, out=max_vals)
-            pred_idx = np.argmax(max_vals)
-            prediction[idx] = (max_idcs[pred_idx] % 29) + 1 
-            old_idx = cur_idx
-    
+            max_vals = np.amax(agg_preds,axis=1)
+            aug_prob[idx] = agg_preds[np.argmax(max_vals)]
+
+    idx = 0
+    prob = np.zeros((num_test,29))
+    for img1, img2 in zip(aug_prob[:-1:2], aug_prob[1::2]):
+        if decision == 'average':
+            avg_prob = np.add(img1,img2) / 2
+            prob[idx,:] = avg_prob
+            idx += 1
+            prob[idx,:] = avg_prob
+            idx += 1
+        elif decision == 'highest':
+            img1_max = np.amax(img1)
+            img2_max = np.amax(img2)
+
+            if img1_max > img2_max:
+                prob[idx,:] = img1
+                idx += 1
+                prob[idx,:] = img1
+            else:
+                prob[idx,:] = img2
+                idx += 1
+                prob[idx,:] = img2
+            idx += 1         
+    prediction = np.argmax(prob,axis=1) + 1
+
     # save predictions model
     write_predictions_file(prediction,output_dir)
 
@@ -155,29 +175,26 @@ if __name__ == "__main__":
                         required=True)
 
     parser.add_argument('-instance',
-                        help='Used instanced-based classification',
+                        help='Use instanced-based classification',
                         action="store_true")
 
-    parser.add_argument('-instance_count',
-                        help='Number of augmented instances of test images to aid prediction',
-                        nargs=1,
-                        type=int,
-                        default=None)
+    parser.add_argument('-augmented',
+                        help='Use augmented images to aid classification',
+                        action="store_true")
 
     parser.add_argument('-decision_mode',
                         help='how instances are used to aid classification',
                         nargs=1,
                         choices=['average','highest'],
-                        default=['highest'])
+                        default=['average'])
     
     args = parser.parse_args()
     
     if args.instance:
-        if args.instance_count is not None:
+        if args.augmented:
             aug_instance_predict(test_data=args.test_data,
                             aug_test_data=args.aug_test_data,
                             model_path=args.input_model,
-                            num_aug=args.instance_count[0],
                             output_dir=args.output,
                             decision=args.decision_mode[0])
         else:
