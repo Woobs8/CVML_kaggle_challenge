@@ -117,7 +117,7 @@ def aug_instance_predict(test_data, aug_test_data, model_path, output_dir, decis
 
         if decision == 'average':
             sum_aug_pred = np.sum(aug_pred)
-            aug_prob[idx] = np.add(pred,sum_aug_pred)
+            aug_prob[idx] = np.add(pred,sum_aug_pred) / (num_aug+1)
                 
         elif decision == 'highest':
             pred = pred.reshape(1,29)
