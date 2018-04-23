@@ -23,7 +23,7 @@ def main(model_path, output_file_path, test_data_path, norm):
     # load model
     svm = SupportVectorMachine()
     svm.load(model_path)
-    test_pred = svm.predict(test_data)
+    test_pred = svm.predict(test_data, instance=True, decision='average')
 
     write_predictions_file(test_pred, output_file_path)
 

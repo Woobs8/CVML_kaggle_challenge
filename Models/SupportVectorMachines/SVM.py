@@ -25,7 +25,7 @@ class SupportVectorMachine:
         if kernel=='linear':
             self.clf=LinearSVC(max_iter=max_iter, C=C, tol=tol, class_weight='balanced')
         elif kernel=='rbf' or kernel=='poly' or kernel=='sigmoid':
-            self.clf=SVC(kernel=kernel, C=C, degree=degree,gamma=gamma,max_iter=max_iter, coef0=coef0,tol=tol,class_weight='balanced')
+            self.clf=SVC(kernel=kernel, C=C, degree=degree,gamma=gamma,max_iter=max_iter, coef0=coef0,tol=tol,class_weight='balanced', probability=True)
         else:
             print(str(self.__class__)+" Error: unknown kernel '"+kernel+"'")
             exit(1)
@@ -59,8 +59,36 @@ class SupportVectorMachine:
         return self  
 
 
-    def predict(self, data, output_file=""):
-        prediction = self.clf.predict(data)
+    def predict(self, data, output_file="", instance=False, decision='average'):
+        num_test, num_features = data.shape
+        if instance:
+            prob_test = self.clf.predict_proba(data)
+
+            idx = 0
+            prob = np.zeros((num_test,29))
+            for img1, img2 in zip(prob_test[:-1:2], prob_test[1::2]):
+                if decision == 'average':
+                    avg_prob = np.add(img1,img2) / 2
+                    prob[idx,:] = avg_prob
+                    idx += 1
+                    prob[idx,:] = avg_prob
+                    idx += 1
+                elif decision == 'highest':
+                    img1_max = np.amax(img1)
+                    img2_max = np.amax(img2)
+
+                    if img1_max > img2_max:
+                        prob[idx,:] = img1
+                        idx += 1
+                        prob[idx,:] = img1
+                    else:
+                        prob[idx,:] = img2
+                        idx += 1
+                        prob[idx,:] = img2
+                    idx += 1         
+            prediction = np.argmax(prob,axis=1) + 1
+        else:
+            prediction = self.clf.predict(data)
 
         if output_file != "":
             dir = os.path.dirname(output_file)
