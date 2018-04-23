@@ -145,6 +145,20 @@ def resize_images(image_data, target_size, interp='cubic'):
         print(string_,end='\r',flush=True)
     return resized_data
 
+def whiten_data(path_to_images, save_image_path, epsilon):
+    """ """
+    # Get Image List
+    img_list = create_image_lists(path_to_images)
+    img_name_list = [os.path.split(x)[1][:-4] for x in img_list]
+
+    # load image data
+    X_train = image_reader(path_to_images) 
+
+    X_train_zca = zca_whitening(X_train, epsilon=epsilon, zero_centered=False)
+    for idx, image in enumerate(X_train_zca):
+        im_path = os.path.join(save_image_path,'Image'+str(idx+1)+'.jpg')
+        imsave(im_path, image)
+
 
 # Attempt at homebrewing a ZCA whitening transform
 # https://stackoverflow.com/questions/41635737/is-this-the-correct-way-of-whitening-an-image-in-python
@@ -216,6 +230,15 @@ if __name__ == '__main__':
                         help='Only perform image resizing - no other augmentation',
                         action="store_true")
 
+    parser.add_argument('-whiten', 
+                        help='Apply ZCA whitening to input images and store in output folder',
+                        action="store_true")
+
+    parser.add_argument('-epsilon',
+                        help='Epsilon parameter for ZCA whitening',
+                        type=float,
+                        default=1e-6)
+
     # test data augmentation
     parser.add_argument('-test_data', 
                         help='Data to be augmented is test data',
@@ -233,10 +256,13 @@ if __name__ == '__main__':
         if not os.path.exists(args.output_dir):
             os.makedirs(args.output_dir )
         
-        if args.test_data:
-            augment_test_data(args.input_data, args.output_dir, args.images_per_sample, target_size=args.target_size, resize_only=args.resize_only)
+        if args.whiten:
+            whiten_data(args.input_data, args.output_dir, args.epsilon)
         else:
-            augment_data(args.input_data, args.input_label, args.output_dir, args.images_per_class,args.output_lbls, target_size=args.target_size, resize_only=args.resize_only)
+            if args.test_data:
+                augment_test_data(args.input_data, args.output_dir, args.images_per_sample, target_size=args.target_size, resize_only=args.resize_only)
+            else:
+                augment_data(args.input_data, args.input_label, args.output_dir, args.images_per_class,args.output_lbls, target_size=args.target_size, resize_only=args.resize_only)
     else:
         print("Error: file '" + args.input_data + "' not found")
         exit(1)
