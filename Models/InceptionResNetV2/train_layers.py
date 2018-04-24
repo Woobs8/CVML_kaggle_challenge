@@ -234,7 +234,7 @@ if __name__ == "__main__":
                         type=str2bool,
                         default=False)
 
-     parser.add_argument('-histogram_graphs', 
+    parser.add_argument('-histogram_graphs', 
                         help='Dropout rate to use',
                         type=str2bool,
                         default=False)
