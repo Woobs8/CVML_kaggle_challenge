@@ -14,11 +14,11 @@ class LRTensorBoard(TensorBoard):
 
     def on_epoch_end(self, epoch, logs=None):
         # Value to inject in logs must be a 1 element numpy array!
-        learn_rate = K.get_value(self.model.optimizer.lr).copy()
+        lr = K.get_value(self.model.optimizer.lr)
         # Save the learn rate in the hist list
         self.lr_hist.append(float(learn_rate))
         # Inject Learn Rate
-        logs['learn_rate'] = learn_rate
+        logs['lr'] = lr
 
         super(LRTensorBoard, self).on_epoch_end(epoch, logs)
 
