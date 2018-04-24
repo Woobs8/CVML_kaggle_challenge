@@ -12,12 +12,15 @@ from keras.applications import VGG19
 from Tools.LearningRate import step_decay
 from Tools.DataGenerator import DataGenerator
 from Tools.DataReader import load_labels
-from keras.callbacks import ModelCheckpoint, LearningRateScheduler, TensorBoard, EarlyStopping
+from Tools.ImageReader import image_reader
+from keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, ReduceLROnPlateau
+from Tools.tensorboard_lr import LRTensorBoard
 from keras import backend as K
 from keras.layers import Lambda, Input
 from keras.callbacks import History 
+K.set_image_data_format('channels_last')
 
-def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_epochs, lr, batch_size, start_layer, stop_layer, early_stop=[3,0.01], clf_dropout=0.5, lr_sched=None, input_model=None, print_model_summary_only=False, use_resize=False, restart=False):
+def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_path, max_epochs, lr, batch_size, start_layer, stop_layer, lr_plateau =[5,0.01,1,0.000001], early_stop=[3,0.01], clf_dropout=0.5, input_model=None, print_model_summary_only=False, use_resize=False, restart=False,histogram_graphs=False):
     # load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
@@ -89,28 +92,35 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
         for layer in final_model.layers:
             layer.trainable = False
         
-    # define model callbacks 
-    checkpoint = ModelCheckpoint(filepath=output_dir+"/checkpoint.h5", monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', period=1)
-    early = EarlyStopping(monitor='val_acc', min_delta=early_stop[1], patience=early_stop[0], verbose=1, mode='auto')
-    tb_path = os.path.join(output_dir,'Graph')
-    tensorboard = TensorBoard(log_dir=tb_path, histogram_freq=0, write_graph=True, write_grads=True,batch_size=batch_size, write_images=True, embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None)
-    history = History()
-    
-    # use Learn rate scheduler if specified
-    if not lr_sched is None:
-        lrate = LearningRateScheduler(step_decay(lr, lr_sched[0], lr_sched[1]))
-        callback_list = [checkpoint, early, tensorboard, lrate, history]
-    else:
-        callback_list = [checkpoint, early, tensorboard, history]
-    
-    # data generators
+
+    # Data generators
     train_generator = DataGenerator(path_to_images=train_data,
                                     labels=cat_train_labels, 
                                     batch_size=batch_size)
+        
+    if histogram_graphs: 
+        # If we want histogram graphs we must pass all val images as numpy array
+        hist_frq = 1
+        validation_images = image_reader(val_data)*(1./255)
+        val_generator = (validation_images, cat_val_labels)
+        val_steps = None
+    else:
+        hist_frq = 0
+        val_steps = len(validation_labels)/batch_size
+        val_generator = DataGenerator(  path_to_images=val_data,
+                                        labels=cat_val_labels, 
+                                        batch_size=batch_size)
     
-    val_generator = DataGenerator(  path_to_images=val_data,
-                                    labels=cat_val_labels, 
-                                    batch_size=batch_size)
+    # define model keras callbacks 
+    checkpoint = ModelCheckpoint(filepath=output_dir+"/checkpoint.h5", monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', period=1)
+    early = EarlyStopping(monitor='val_acc', min_delta=early_stop[1], patience=early_stop[0], verbose=1, mode='auto')
+    tensorboard = LRTensorBoard(log_dir=tb_path, histogram_freq=hist_frq, write_graph=True, write_grads=True,batch_size=batch_size, write_images=True, embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None)
+    plateau = ReduceLROnPlateau(monitor='val_loss', factor=lr_plateau[2], patience=lr_plateau[0], verbose=0, mode='auto', epsilon=lr_plateau[1], cooldown=1, min_lr=lr_plateau[3])
+    history = History()
+    
+    # Create List of Callbacks
+    callback_list = [checkpoint, early, tensorboard, plateau, history]
+    
     if not restart:
         # set trainable layers
         start_layer_idx = [i for i,j in enumerate(final_model.layers) if j.name==start_layer][0]
@@ -132,7 +142,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
                         steps_per_epoch = len(training_labels)/batch_size,
                         epochs = max_epochs,
                         validation_data = val_generator,
-                        validation_steps = len(validation_labels)/batch_size,
+                        validation_steps = val_steps,
                         callbacks = callback_list,
                         workers=1, # Only use one worker or the batches will be dublicates of each other 
                         use_multiprocessing=True)
@@ -142,7 +152,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, max_e
     # print summary
     with open(output_dir + '/' + 'summary.txt','w') as fp:
         fp.write('Max epochs: '+ str(max_epochs)+'\n')
-        fp.write('lr: '+ str(lr)+'\n')
+        fp.write('lr: '+ str(tensorboard.get_lr_hist())+'\n')
         fp.write('Batch size: '+ str(batch_size)+'\n')
         fp.write('Starting layer: ' + str(start_layer)+'\n')
         fp.write('Stopping layer: ' + str(stop_layer)+'\n')
@@ -180,6 +190,10 @@ if __name__ == "__main__":
                         help='output directory where results are stored',
                         required=True)
 
+    parser.add_argument('-tb_path', 
+                        help='output directory where tensorboard results are stored. The folder structure should be /logdir/Run1/ , /logdir/Run2/ etc. ',
+                        required=True)
+
     parser.add_argument('-stop_layer', 
                         help='Layer to start recursive training from (layer is included in training)',
                         required=True)
@@ -198,9 +212,10 @@ if __name__ == "__main__":
                         type=float,
                         default=0.01)
    
-    parser.add_argument('-lr_sched',
-                        help='Parameters for learning rate schedule (drop, epochs between drop)',
-                        nargs=2,
+    parser.add_argument('-lr_plateau',
+                        help='Parameters for applying learn rate drop on \'val loss\' plateau schedule (patience, min_delta, drop factor, min_lr)',
+                        nargs=4,
+                        default=[5,0.01,0.1,0.000001],
                         type=float,
                         required=False) 
 
@@ -235,6 +250,11 @@ if __name__ == "__main__":
                         type=str2bool,
                         default=False)
     
+    parser.add_argument('-histogram_graphs', 
+                        help='Dropout rate to use',
+                        type=str2bool,
+                        default=False)   
+
     parser.add_argument('-summary_only', 
                         help='Stop Script after prining model summary (ie. no training)',
                         type=str2bool,
@@ -250,7 +270,7 @@ if __name__ == "__main__":
                         max_epochs=args.epochs, 
                         lr=args.lr, 
                         batch_size=args.batch_size, 
-                        lr_sched=args.lr_sched,
+                        lr_plateau=args.lr_plateau,
                         input_model=args.input_model,
                         start_layer=args.start_layer,
                         stop_layer=args.stop_layer,
@@ -258,4 +278,6 @@ if __name__ == "__main__":
                         print_model_summary_only=args.summary_only,
                         use_resize=args.use_resize,
                         restart=args.restart,
-                        early_stop=args.early_stop)
+                        early_stop=args.early_stop,
+                        tb_path=args.tb_path,
+                        histogram_graphs=args.histogram_graphs)
