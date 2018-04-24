@@ -16,7 +16,7 @@ class LRTensorBoard(TensorBoard):
         # Value to inject in logs must be a 1 element numpy array!
         lr = K.get_value(self.model.optimizer.lr)
         # Save the learn rate in the hist list
-        self.lr_hist.append(float(learn_rate))
+        self.lr_hist.append(float(lr))
         # Inject Learn Rate
         logs['lr'] = lr
 
