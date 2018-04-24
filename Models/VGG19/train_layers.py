@@ -9,7 +9,6 @@ from keras import optimizers,layers
 from keras.models import Model, load_model
 from keras.utils import to_categorical
 from keras.applications import VGG19
-from Tools.LearningRate import step_decay
 from Tools.DataGenerator import DataGenerator
 from Tools.DataReader import load_labels
 from Tools.ImageReader import image_reader
