@@ -114,7 +114,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
     # Validation data generator
     val_data_gen = ImageDataGenerator(rescale = 1./255, featurewise_center=True)
     val_data_gen.fit(val_data)    
-    val_generator = val_data_gen.flow(training_data,
+    val_generator = val_data_gen.flow(val_data,
                                         cat_val_labels,
                                         batch_size=batch_size,
                                         shuffle=False)
