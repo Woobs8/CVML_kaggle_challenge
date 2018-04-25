@@ -178,7 +178,7 @@ if __name__ == "__main__":
                         required=True)
 
     # only allow model to train whole inception "blocks"
-    allowed_layers = ['TopLayers','mixed_7a','mixed_6a','mixed_5b','conv2d_1']
+    allowed_layers = ['predictions','mixed_7a','mixed_6a','mixed_5b','conv2d_1']
     parser.add_argument('-stop_layer', 
                         help='Layer to stop training from (layer is included in training). Limited to beginning of inception blocks',
                         required=True,
