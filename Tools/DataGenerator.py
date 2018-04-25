@@ -6,7 +6,7 @@ from keras.utils import Sequence
 
 class DataGenerator(Sequence):
     'Generates data for Keras'
-    def __init__(self, path_to_images, labels, batch_size=32):
+    def __init__(self, path_to_images, labels, shuffle=True, batch_size=32):
         'Initialization'
         # Store arguments
         self.batch_size = batch_size
@@ -17,17 +17,20 @@ class DataGenerator(Sequence):
         self.idx = 0
         # Store the length of available images
         self.num_images = len(self.img_list)
+        # Shuffle
+        self.shuffle = shuffle
         # Initialize First Epoch
         self.on_epoch_end()
    
     def on_epoch_end(self):
         'Updates image list after each epoch'
-        # Random shuffle
-        permutation = np.random.permutation(self.num_images)
-        # Rearrange Images Given The Shuffle
-        self.img_list = [self.img_list[i] for i in permutation]
-        # Rearrange The Labels Given The Shuffle
-        self.labels = self.labels[permutation]
+        if self.shuffle:
+            # Random shuffle
+            permutation = np.random.permutation(self.num_images)
+            # Rearrange Images Given The Shuffle
+            self.img_list = [self.img_list[i] for i in permutation]
+            # Rearrange The Labels Given The Shuffle
+            self.labels = self.labels[permutation]
     
     def __len__(self):
         'Denotes the number of batches per epoch'
@@ -50,6 +53,9 @@ class DataGenerator(Sequence):
         # Generate data
         X, y = self.__data_generation()
         return X, y
+    
+    def set_shuffle(self,shuffle):
+        self.shuffle = shuffle
 
 
 

@@ -15,7 +15,7 @@ from Tools.ImageReader import image_reader
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, TensorBoard, EarlyStopping
 from Tools.tensorboard_lr import LRTensorBoard
 from keras import backend as K
-from keras.layers import Lambda, Input, GlobalMaxPooling2D
+from keras.layers import Lambda, Input
 from keras.callbacks import History 
 K.set_image_data_format('channels_last')
 
@@ -44,19 +44,34 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             resize = Model(inp,inp_resize)
             
             # get the InceptionResNetV2 model and add it on top of the resize layer
-            model = InceptionResNetV2(input_tensor=resize.output, weights = "imagenet", include_top=False) 
+            base_model = InceptionResNetV2(input_tensor=resize.output, weights = "imagenet", include_top=False) 
         # use original image sizes
         else:
             # get the InceptionResNetV2 model
-            model = InceptionResNetV2(weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
+            base_model = InceptionResNetV2(weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
         
         # create classifier - InceptionResNetV2 only uses an average pooling layer and a softmax classifier on top
         # Some articles mention that a dropout layer of 0.2 is used between the pooling layer and the softmax layer
-        avg_pool = layers.GlobalAveragePooling2D(name='avg_pool')(model.output)
-        dropout = layers.Dropout(clf_dropout,name='dropout1')(avg_pool)
-        predictions = layers.Dense(num_classes, activation="softmax", name='predictions')(dropout)
-        final_model = Model(input = model.input, output = predictions)
-    
+        # create The Classifier
+
+        #Finalize The Base Model
+        max_pool = layers.MaxPooling2D(name = "max_pool_2d")(base_model.output)
+        flatten = layers.Flatten(name='Flatten')(max_pool)
+        base_model = Model(input = base_model.input, output = flatten)
+        base_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
+        
+        # Create The Top Layers
+        inp_clf = Input(shape=(4*4*1536,),name='bottleneck_input')
+        clf = layers.Dense(4096, activation="relu",name="fc1")(inp_clf)
+        clf = layers.Dropout(clf_dropout, name="dropout1")(clf)
+        clf = layers.Dense(4096, activation="relu", name="fc2")(clf)
+        predictions = layers.Dense(num_classes, activation="softmax",name="predictions")(clf)
+        top_layer = Model(input = inp_clf, output = predictions, name="TopLayers")
+
+        # Concatenate The Base And the Top Model
+        final_model = Model(input = base_model.input, output = top_layer(base_model.output))
+
+
     # load input model
     else:
         print("Using existing model: {}".format(input_model))
@@ -104,7 +119,10 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             layer.trainable = True
                 
         # compile the model 
+        base_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
+        top_layer.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
         final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
+        
 
     # print model summary and stop if specified
     final_model.summary()
@@ -112,14 +130,46 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
         return 
 
     # fit model
-    final_model.fit_generator(train_generator,
-                        steps_per_epoch = len(training_labels)/batch_size,
-                        epochs = max_epochs,
-                        validation_data = val_generator,
-                        validation_steps = val_steps,
-                        callbacks = callback_list,
-                        workers=1,
-                        use_multiprocessing=True)
+    if (input_model is None) and start_layer == "TopLayers" and stop_layer == "TopLayers":
+        # Only train top classifier
+        train_generator.set_shuffle(False)
+        train_bottlenecks = base_model.predict_generator(generator=train_generator,
+                                                        verbose=1,
+                                                        workers=1,
+                                                        use_multiprocessing=True)
+        val_generator.set_shuffle(False)
+        val_bottlenecks = base_model.predict_generator( generator=val_generator,
+                                                            verbose=1,
+                                                            workers=1,
+                                                            use_multiprocessing=True)
+                                                    
+        callback_list = [early, tensorboard, plateau, history] # Remove Checkpoint from callback list 
+        train_generator.set_shuffle(True)
+        val_generator.set_shuffle(True)
+
+        top_layer.fit_generator(    train_generator,
+                                    steps_per_epoch = len(training_labels)/batch_size,
+                                    epochs = max_epochs,
+                                    validation_data = val_generator,
+                                    validation_steps = val_steps,
+                                    callbacks = callback_list,
+                                    workers=1,
+                                    use_multiprocessing=True)
+
+        final_model.save(output_dir+"/InResModel.h5")
+        
+        print("Checking Weights")
+        print(top_layer.get_layer("predictions")==final_model.get_layer("TopLayers").get_layer("predictions"))
+
+    else:                                
+        final_model.fit_generator(train_generator,
+                            steps_per_epoch = len(training_labels)/batch_size,
+                            epochs = max_epochs,
+                            validation_data = val_generator,
+                            validation_steps = val_steps,
+                            callbacks = callback_list,
+                            workers=1,
+                            use_multiprocessing=True)
     
     print("Finished training layers: {} - {}".format(start_layer,stop_layer), flush=True)
 
@@ -169,7 +219,7 @@ if __name__ == "__main__":
                         required=True)
 
     # only allow model to train whole inception "blocks"
-    allowed_layers = ['predictions','mixed_7a','mixed_6a','mixed_5b','conv2d_1']
+    allowed_layers = ['TopLayers','mixed_7a','mixed_6a','mixed_5b','conv2d_1']
     parser.add_argument('-stop_layer', 
                         help='Layer to stop training from (layer is included in training). Limited to beginning of inception blocks',
                         required=True,
