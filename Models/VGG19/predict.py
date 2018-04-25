@@ -41,7 +41,7 @@ def instance_predict(test_data, model_path, output_dir, decision):
     final_model.summary()
 
     # predict
-    prob_test = final_model.predict(X_test,verbose=1)
+    prob_test = np.exp(final_model.predict(X_test,verbose=1))
 
     idx = 0
     prob = np.zeros((num_test,29))
@@ -102,51 +102,46 @@ def aug_instance_predict(test_data, aug_test_data, model_path, output_dir, decis
     final_model.summary()
 
     # predict
-    prob_test = final_model.predict(X_test,verbose=1)
-    prob_aug_test = final_model.predict(X_aug_test,verbose=1)
+    prob_test = np.exp(final_model.predict(X_test,verbose=1))
+    prob_aug_test = np.exp(final_model.predict(X_aug_test,verbose=1))
 
-    prediction = np.zeros(num_test)
-    aug_prob = np.zeros((num_test,29))
+    prob = np.zeros((num_test,29))
     old_aug_idx = 0
     new_aug_idx = 0
-    for idx, pred in enumerate(prob_test):
-        num_aug = aug_img_count[idx]
-        new_aug_idx += num_aug
-        aug_pred = prob_aug_test[int(old_aug_idx):int(new_aug_idx)]
-        old_aug_idx = new_aug_idx
+    for idx in range(0,num_test,2):
+        # image 1  
+        img1 = prob_test[idx].reshape(1,29)                                 # extract original image
+        num_aug1 = aug_img_count[idx]                                       # number of augmented samples
+        new_aug_idx += num_aug1                                             # index of last augmented samples
+        img1_aug_pred = prob_aug_test[int(old_aug_idx):int(new_aug_idx)]    # extract augmented samples
+        old_aug_idx = new_aug_idx                                           # index of first augmented sample for next image
 
+        # image 2
+        img2 = prob_test[idx+1].reshape(1,29)                               # extract original image
+        num_aug2 = aug_img_count[idx+1]                                     # number of augmented samples
+        new_aug_idx += num_aug2                                             # index of last augmented samples
+        img2_aug_pred = prob_aug_test[int(old_aug_idx):int(new_aug_idx)]    # extract augmented samples
+        old_aug_idx = new_aug_idx                                           # index of first augmented sample for next image
+
+        # concatenate augmented images and original images
+        agg_prob = np.concatenate((img1, img2, img1_aug_pred, img2_aug_pred))
+        
         if decision == 'average':
-            sum_aug_pred = np.sum(aug_pred)
-            aug_prob[idx] = np.exp(np.add(pred,sum_aug_pred) / (num_aug+1))
+            sum_aug_prob = np.sum(agg_prob,axis=0)                  # sum probabilities across all columns (as we are only interested in the maximum, division is uncessary)
+            prob[idx] = sum_aug_prob                                
+            prob[idx+1] = sum_aug_prob
                 
         elif decision == 'highest':
-            pred = pred.reshape(1,29)
-            agg_preds = np.append(aug_pred,pred,axis=0)
-            max_vals = np.amax(agg_preds,axis=1)
-            aug_prob[idx] = agg_preds[np.argmax(max_vals)]
+            max_vals = np.amax(agg_prob,axis=1)                     # find highest class probability for each sample
+            prob[idx] = agg_prob[np.argmax(max_vals)]               # assign most confident prediction to both images
+            prob[idx+1] = agg_prob[np.argmax(max_vals)]
 
-    idx = 0
-    prob = np.zeros((num_test,29))
-    for img1, img2 in zip(aug_prob[:-1:2], aug_prob[1::2]):
-        if decision == 'average':
-            avg_prob = np.exp(np.add(img1,img2) / 2)
-            prob[idx,:] = avg_prob
-            idx += 1
-            prob[idx,:] = avg_prob
-            idx += 1
-        elif decision == 'highest':
-            img1_max = np.amax(img1)
-            img2_max = np.amax(img2)
+        elif decision == 'weighted_average':
+            max_vals = np.amax(agg_prob,axis=1)                     # find highest class probability for each sample
+            weights = max_vals / np.amax(max_vals)                  # weigh the contribution of each sample, by its confidence in its prediction
+            prob[idx] = np.dot(weights,agg_prob)                    # assign weighted sum of all sample predictions to both images
+            prob[idx+1] = np.dot(weights,agg_prob)                  # (as we are only interested in the maximum, division is uncessary)
 
-            if img1_max > img2_max:
-                prob[idx,:] = img1
-                idx += 1
-                prob[idx,:] = img1
-            else:
-                prob[idx,:] = img2
-                idx += 1
-                prob[idx,:] = img2
-            idx += 1         
     prediction = np.argmax(prob,axis=1) + 1
 
     # save predictions model
@@ -185,7 +180,7 @@ if __name__ == "__main__":
     parser.add_argument('-decision_mode',
                         help='how instances are used to aid classification',
                         nargs=1,
-                        choices=['average','highest'],
+                        choices=['average','highest','weighted_average'],
                         default=['average'])
     
     args = parser.parse_args()
