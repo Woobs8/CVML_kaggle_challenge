@@ -11,7 +11,7 @@ def separate_classes_into_folders(labels):
     unique_lbls = np.unique(labels)
     # Create The Folders Corrosponding To Labels
     for lbl in unique_lbls:
-        path = args.path_to_save_images+"/"+str(int(lbl))
+        path = args.path_to_save_images+"/"+"0"+str(int(lbl))
         print("Creating Label folder: ")
         print(path)
         
