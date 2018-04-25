@@ -17,6 +17,7 @@ class DataGenerator(Sequence):
         self.idx = 0
         # Store the length of available images
         self.num_images = len(self.img_list)
+        print(self.num_images)
         # Shuffle
         self.shuffle = shuffle
         # Initialize First Epoch
@@ -34,7 +35,7 @@ class DataGenerator(Sequence):
     
     def __len__(self):
         'Denotes the number of batches per epoch'
-        return int(np.floor(self.num_images / self.batch_size))
+        return int(np.ceil(self.num_images / self.batch_size)) 
 
     def __data_generation(self):
         'Generates data containing batch_size samples'
@@ -42,6 +43,10 @@ class DataGenerator(Sequence):
         batch = np.array([ x % self.num_images for x in range(self.idx, self.idx + self.batch_size) ])
         # Update Index
         self.idx = (self.idx + self.batch_size) % self.num_images
+        if self.idx > 0 and self.idx < self.batch_size:
+            batch = batch[0:self.batch_size-self.idx]
+            print(batch.shape)
+            self.idx=0
         # Load images in numpy array
         X = np.array([np.array(imread(self.img_list[img_idx])) for img_idx in batch]) * (1. / 255)
         # Get the labels

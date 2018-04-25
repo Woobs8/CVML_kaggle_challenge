@@ -54,23 +54,16 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
         # Some articles mention that a dropout layer of 0.2 is used between the pooling layer and the softmax layer
         # create The Classifier
 
-        #Finalize The Base Model
+        #Finalize Model
         max_pool = layers.MaxPooling2D(name = "max_pool_2d")(base_model.output)
         flatten = layers.Flatten(name='Flatten')(max_pool)
-        base_model = Model(input = base_model.input, output = flatten)
-        base_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
-        
-        # Create The Top Layers
-        inp_clf = Input(shape=(4*4*1536,),name='bottleneck_input')
-        clf = layers.Dense(4096, activation="relu",name="fc1")(inp_clf)
+        clf = layers.Dense(4096, activation="relu",name="fc1")(flatten)
         clf = layers.Dropout(clf_dropout, name="dropout1")(clf)
         clf = layers.Dense(4096, activation="relu", name="fc2")(clf)
         predictions = layers.Dense(num_classes, activation="softmax",name="predictions")(clf)
-        top_layer = Model(input = inp_clf, output = predictions, name="TopLayers")
 
         # Concatenate The Base And the Top Model
-        final_model = Model(input = base_model.input, output = top_layer(base_model.output))
-
+        final_model = Model(input = base_model.input, output = predictions)
 
     # load input model
     else:
@@ -119,8 +112,6 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             layer.trainable = True
                 
         # compile the model 
-        base_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
-        top_layer.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
         final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
         
 
@@ -130,46 +121,14 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
         return 
 
     # fit model
-    if (input_model is None) and start_layer == "TopLayers" and stop_layer == "TopLayers":
-        # Only train top classifier
-        train_generator.set_shuffle(False)
-        train_bottlenecks = base_model.predict_generator(generator=train_generator,
-                                                        verbose=1,
-                                                        workers=1,
-                                                        use_multiprocessing=True)
-        val_generator.set_shuffle(False)
-        val_bottlenecks = base_model.predict_generator( generator=val_generator,
-                                                            verbose=1,
-                                                            workers=1,
-                                                            use_multiprocessing=True)
-                                                    
-        callback_list = [early, tensorboard, plateau, history] # Remove Checkpoint from callback list 
-        train_generator.set_shuffle(True)
-        val_generator.set_shuffle(True)
-
-        top_layer.fit_generator(    train_generator,
-                                    steps_per_epoch = len(training_labels)/batch_size,
-                                    epochs = max_epochs,
-                                    validation_data = val_generator,
-                                    validation_steps = val_steps,
-                                    callbacks = callback_list,
-                                    workers=1,
-                                    use_multiprocessing=True)
-
-        final_model.save(output_dir+"/InResModel.h5")
-        
-        print("Checking Weights")
-        print(top_layer.get_layer("predictions")==final_model.get_layer("TopLayers").get_layer("predictions"))
-
-    else:                                
-        final_model.fit_generator(train_generator,
-                            steps_per_epoch = len(training_labels)/batch_size,
-                            epochs = max_epochs,
-                            validation_data = val_generator,
-                            validation_steps = val_steps,
-                            callbacks = callback_list,
-                            workers=1,
-                            use_multiprocessing=True)
+    final_model.fit_generator(train_generator,
+                        steps_per_epoch = len(training_labels)/batch_size,
+                        epochs = max_epochs,
+                        validation_data = val_generator,
+                        validation_steps = val_steps,
+                        callbacks = callback_list,
+                        workers=1,
+                        use_multiprocessing=True)
     
     print("Finished training layers: {} - {}".format(start_layer,stop_layer), flush=True)
 
