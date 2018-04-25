@@ -93,7 +93,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             layer.trainable = False
         
     # load data
-    train_data = image_reader(path_to_images=train_data)
+    training_data = image_reader(path_to_images=train_data)
 
     # Data generators
     train_data_gen = ImageDataGenerator(
@@ -105,9 +105,9 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
         featurewise_center=True,
         data_format="channels_last")
     
-    train_data_gen.fit(train_data)
+    train_data_gen.fit(training_data)
 
-    train_generator = train_data_gen.flow(train_data,
+    train_generator = train_data_gen.flow(training_data,
                                         training_labels,
                                         batch_size=batch_size,
                                         shuffle=True)
