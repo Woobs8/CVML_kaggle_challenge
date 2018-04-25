@@ -104,6 +104,8 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
         rotation_range=90,
         featurewise_center=True,
         data_format="channels_last")
+    
+    train_data_gen.fit(train_data)
 
     train_generator = train_data_gen.flow(train_data,
                                         training_labels,
