@@ -108,7 +108,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
     train_data_gen.fit(training_data)
 
     train_generator = train_data_gen.flow(training_data,
-                                        training_labels,
+                                        cat_train_labels,
                                         batch_size=batch_size,
                                         shuffle=True)
 
