@@ -10,6 +10,7 @@ from keras.models import Model, load_model
 from keras.utils import to_categorical
 from keras.applications import VGG19
 from Tools.DataGenerator import DataGenerator
+from keras.preprocessing.image import ImageDataGenerator
 from Tools.DataReader import load_labels
 from Tools.ImageReader import image_reader
 from keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, ReduceLROnPlateau
@@ -91,12 +92,24 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
         for layer in final_model.layers:
             layer.trainable = False
         
+    # load data
+    train_data = image_reader(path_to_images=train_data)
 
     # Data generators
-    train_generator = DataGenerator(path_to_images=train_data,
-                                    labels=cat_train_labels, 
-                                    batch_size=batch_size)
-        
+    train_data_gen = ImageDataGenerator(
+        rescale = 1./255,
+        horizontal_flip = True,
+        vertical_flip=True,
+        fill_mode = "nearest",
+        rotation_range=90,
+        featurewise_center=True,
+        data_format="channels_last")
+
+    train_generator = train_data_gen.flow(train_data,
+                                        training_labels,
+                                        batch_size=batch_size,
+                                        shuffle=True)
+
     if histogram_graphs: 
         # If we want histogram graphs we must pass all val images as numpy array
         hist_frq = 1
@@ -138,10 +151,10 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
 
     # fit model
     final_model.fit_generator(train_generator,
-                        steps_per_epoch = len(training_labels)/batch_size,
+                        steps_per_epoch = 15*len(training_labels)/batch_size,
                         epochs = max_epochs,
                         validation_data = val_generator,
-                        validation_steps = val_steps,
+                        validation_steps = None,
                         callbacks = callback_list,
                         workers=1, # Only use one worker or the batches will be dublicates of each other 
                         use_multiprocessing=True)
