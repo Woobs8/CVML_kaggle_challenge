@@ -153,7 +153,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
 
     # fit model
     final_model.fit_generator(train_generator,
-                        steps_per_epoch = len(training_labels)/batch_size,
+                        steps_per_epoch = 10*len(training_labels)/batch_size,
                         epochs = max_epochs,
                         validation_data = val_generator,
                         validation_steps = None,
