@@ -25,6 +25,7 @@ class DataGenerator(Sequence):
    
     def on_epoch_end(self):
         'Updates image list after each epoch'
+        self.idx = 0
         if self.shuffle:
             # Random shuffle
             permutation = np.random.permutation(self.num_images)
@@ -43,10 +44,8 @@ class DataGenerator(Sequence):
         batch = np.array([ x % self.num_images for x in range(self.idx, self.idx + self.batch_size) ])
         # Update Index
         self.idx = (self.idx + self.batch_size) % self.num_images
-        if self.idx > 0 and self.idx < self.batch_size:
+        if self.idx > 0 and self.idx < self.batch_size - 1:
             batch = batch[0:self.batch_size-self.idx]
-            print(batch.shape)
-            self.idx=0
         # Load images in numpy array
         X = np.array([np.array(imread(self.img_list[img_idx])) for img_idx in batch]) * (1. / 255)
         # Get the labels
