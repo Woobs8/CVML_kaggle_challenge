@@ -47,7 +47,7 @@ def create_image_lists(image_dir):
 
 if __name__ == '__main__':
     import sys
-    from Tools.DataReader import load_labels
+    from DataReader import load_labels
 
     parser = argparse.ArgumentParser(prog='Separate images into folders sorted by classes',
                                     description='''Program separates images into folders sorted by the classes of the image.
