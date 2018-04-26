@@ -94,7 +94,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
         
     # load data
     training_data = image_reader(path_to_images=train_data)
-    val_data = image_reader(path_to_images=val_data)
+    validation_data = image_reader(path_to_images=val_data)
 
     # Training data generator
     train_data_gen = ImageDataGenerator(
@@ -103,18 +103,18 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
         vertical_flip=True,
         fill_mode = "nearest",
         rotation_range=90,
-        featurewise_center=True,
+        featurewise_center=False,
         data_format="channels_last")
-    train_data_gen.fit(training_data)
+    #train_data_gen.fit(np.concat((training_data,validation_data)))
     train_generator = train_data_gen.flow(training_data,
                                         cat_train_labels,
                                         batch_size=batch_size,
                                         shuffle=True)
 
     # Validation data generator
-    val_data_gen = ImageDataGenerator(rescale = 1./255, featurewise_center=True, data_format="channels_last")
-    val_data_gen.fit(val_data)    
-    val_generator = val_data_gen.flow(val_data,
+    val_data_gen = ImageDataGenerator(rescale = 1./255, featurewise_center=False, data_format="channels_last")
+    #val_data_gen.fit(np.concat((training_data,validation_data)))
+    val_generator = val_data_gen.flow(validation_data,
                                         cat_val_labels,
                                         batch_size=batch_size,
                                         shuffle=False)
