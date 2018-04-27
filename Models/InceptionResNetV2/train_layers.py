@@ -15,7 +15,7 @@ from Tools.ImageReader import image_reader
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, TensorBoard, EarlyStopping
 from Tools.tensorboard_lr import LRTensorBoard
 from keras import backend as K
-from keras.layers import Lambda, Input, GlobalMaxPooling2D
+from keras.layers import Lambda, Input, GlobalMaxPooling2D, Flatten, Dense, Dropout
 from keras.callbacks import History 
 K.set_image_data_format('channels_last')
 
@@ -50,11 +50,12 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             # get the InceptionResNetV2 model
             model = InceptionResNetV2(weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
         
-        # create classifier - InceptionResNetV2 only uses an average pooling layer and a softmax classifier on top
-        # Some articles mention that a dropout layer of 0.2 is used between the pooling layer and the softmax layer
-        avg_pool = layers.GlobalAveragePooling2D(name='avg_pool')(model.output)
-        dropout = layers.Dropout(clf_dropout,name='dropout1')(avg_pool)
-        predictions = layers.Dense(num_classes, activation="softmax", name='predictions')(dropout)
+        # create classifier
+        flatten = Flatten()(model.output)
+        fc1 = Dense(4096,activation="relu",name="fc1")(flatten)
+        dropout = Dropout(clf_dropout,name='dropout1')(fc1)
+        fc2 = Dense(4096,activation="relu",name="fc2")(dropout)
+        predictions = Dense(num_classes, activation="softmax", name='predictions')(fc2)
         final_model = Model(input = model.input, output = predictions)
     
     # load input model
@@ -169,7 +170,7 @@ if __name__ == "__main__":
                         required=True)
 
     # only allow model to train whole inception "blocks"
-    allowed_layers = ['predictions','mixed_7a','mixed_6a','mixed_5b','conv2d_1']
+    allowed_layers = ['predictions','fc1','fc2','mixed_7a','mixed_6a','mixed_5b','conv2d_1']
     parser.add_argument('-stop_layer', 
                         help='Layer to stop training from (layer is included in training). Limited to beginning of inception blocks',
                         required=True,
