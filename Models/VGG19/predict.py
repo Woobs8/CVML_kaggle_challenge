@@ -47,7 +47,7 @@ def instance_predict(test_data, model_path, output_dir, decision):
     prob = np.zeros((num_test,29))
     for img1, img2 in zip(prob_test[:-1:2], prob_test[1::2]):
         if decision == 'average':
-            avg_prob = np.exp(np.add(img1,img2) / 2)
+            avg_prob = np.add(img1,img2)    # add probabilities (as we are only interested in the maximum, division is uncessary)
             prob[idx,:] = avg_prob
             idx += 1
             prob[idx,:] = avg_prob
