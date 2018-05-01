@@ -5,7 +5,7 @@ import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], '..','..'))
 import argparse
 import numpy as np
-from keras import optimizers,layers
+from keras import optimizers,layers,regularizers
 from keras.models import Model, load_model
 from keras.utils import to_categorical
 from keras.applications import InceptionResNetV2
@@ -42,19 +42,19 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             # Create Input Tensor
             inp = Input(shape=(None, None, 3),name='image_input')
             # First Branch
-            inp_slice_1= Lambda(lambda image: image[:,:len(image)/2,:],name='image_slice_1')(inp)
+            inp_slice_1= Lambda(lambda image: image[:,:128,:],name='image_slice')(inp)
             model_1 = InceptionResNetV2(input_tensor=inp_slice_1,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
             model_1.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
             for layer in model_1.layers:
-                layer.name = name + "_1"
+                layer.name = layer.name + "_1"
             dropout_1 = layers.Dropout(clf_dropout,name='dropout_1')(model_1.output)
 
             # Second Branch
-            inp_slice_2 = Lambda(lambda image: image[:,len(image)/2:,:],name='image_slice_2')(inp)
+            inp_slice_2 = Lambda(lambda image: image[:,128:,:],name='image_slice')(inp)
             model_2 = InceptionResNetV2(input_tensor=inp_slice_2,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
             model_2.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
-            for layer in model_1.layers:
-                layer.name = name + "_2"
+            for layer in model_2.layers:
+                layer.name = layer.name + "_2"
             dropout_2 = layers.Dropout(clf_dropout,name='dropout_2')(model_2.output)
             # Merge Branches
             merged_branches = layers.concatenate([dropout_1, dropout_2], axis=-1)

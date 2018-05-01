@@ -5,7 +5,7 @@ import tensorflow as tf
 import re
 from shutil import move
 from scipy.misc import imread, imsave
-from DataReader import load_labels
+from Tools.DataReader import load_labels
 
 def image_reader(path_to_images, path_to_labels=None, save_image_as_np_path=None):
     """ """

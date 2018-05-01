@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.misc import imread
-from ImageReader import create_image_lists
+from Tools.ImageReader import create_image_lists
 from keras.utils import Sequence
 from keras.preprocessing.image import ImageDataGenerator
 
@@ -51,7 +51,7 @@ class DataGenerator(Sequence):
             if self.instance_based:
                 self.permutation = np.random.permutation(self.num_images)
             else:
-                inst_perm = np.random.permutation(self.num_images/2)
+                inst_perm = np.random.permutation(int(self.num_images/2))
                 rep_perm = np.repeat(inst_perm,2)*2 # times 2 because we only have half the values
                 rep_perm[1::2] += 1 # Every second repeated value should be added 1 to include the pair image
                 self.permutation = rep_perm
@@ -91,10 +91,7 @@ class DataGenerator(Sequence):
 
     def __augment_images__(self,X,y):
         for X_batch, y_batch in self.datagen.flow(X, y, 
-                                        batch_size=self.batch_size,
-                                        save_prefix="Image",
-                                        save_format="jpeg",
-                                        save_to_dir="/Users/rasmusorndrup/Repositories/TestImages"):
+                                        batch_size=self.batch_size):
             break
         if self.instance_based:
             if len(X_batch) % 2 != 0:
