@@ -19,7 +19,7 @@ from keras.layers import Lambda, Input, GlobalMaxPooling2D
 from keras.callbacks import History 
 K.set_image_data_format('channels_last')
 
-def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_path, max_epochs, lr, batch_size, train_mode, lr_plateau =[5,0.01,1,0.000001], early_stop=[3,0.01], clf_dropout=0.2, input_model=None, print_model_summary_only=False, use_resize=False, restart=False, histogram_graphs=False, instance_based=False):
+def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_path, max_epochs, lr, batch_size, train_mode, lr_plateau =[5,0.01,1,0.000001], early_stop=[3,0.01], clf_dropout=0.2, restart_model=None, input_model=None, print_model_summary_only=False, use_resize=False, restart=False, histogram_graphs=False, instance_based=False):
     # load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
@@ -36,31 +36,53 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
     cat_val_labels = to_categorical(validation_labels)
 
     # no input model specified - generate new model
-    if input_model is None:
+    if restart_model is None:
         # add resize layer to fit images for InceptionResNetV2 input layer (299x299)
         if instance_based:
-            # Create Input Tensor
+            # create input tensor
             inp = Input(shape=(None, None, 3),name='image_input')
-            # First Branch
+
+            # slice input tensor to split the two images
             inp_slice_1= Lambda(lambda image: image[:,:128,:],name='image_slice')(inp)
-            model_1 = InceptionResNetV2(input_tensor=inp_slice_1,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
+            inp_slice_2 = Lambda(lambda image: image[:,128:,:],name='image_slice')(inp)
+
+            # create two new branches from pretrained imagenet weights
+            if input_model is None:
+                model_1 = InceptionResNetV2(input_tensor=inp_slice_1,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
+                model_2 = InceptionResNetV2(input_tensor=inp_slice_2,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
+            # load input model and split into two branches
+            else:
+                # load model, pop classification layers
+                model_template = load_model(input_model)
+                avg_pool = model_template.get_layer('global_average_pooling2d')
+
+                # create the two branches
+                model1 = Model(input=model_template.input, output=avg_pool)
+                model2 = Model(input=model_template.input, output=avg_pool)
+
+                # propagate an input slice to each branch
+                model1.input_tensor = inp_slice_1
+                model2.input_tensor = inp_slice_2
+
+            # create first branch
             model_1.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
             for layer in model_1.layers:
                 layer.name = layer.name + "_1"
             dropout_1 = layers.Dropout(clf_dropout,name='dropout_1')(model_1.output)
 
-            # Second Branch
-            inp_slice_2 = Lambda(lambda image: image[:,128:,:],name='image_slice')(inp)
-            model_2 = InceptionResNetV2(input_tensor=inp_slice_2,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
+            # create second branch
             model_2.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
             for layer in model_2.layers:
                 layer.name = layer.name + "_2"
             dropout_2 = layers.Dropout(clf_dropout,name='dropout_2')(model_2.output)
-            # Merge Branches
+           
+            # merge branches before classification layer
             merged_branches = layers.concatenate([dropout_1, dropout_2], axis=-1)
-            # Predictions
+            
+            # add classifier
             predictions = layers.Dense(num_classes, activation="softmax", name='predictions')(merged_branches)
-            # Create Final Model
+            
+            # create final model
             final_model = Model(input = inp, output = predictions)
         
         else:
@@ -86,8 +108,8 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
 
 
     else:
-        print("Using existing model: {}".format(input_model))
-        final_model = load_model(input_model)
+        print("Using existing model: {}".format(restart_model))
+        final_model = load_model(restart_model)
 
     if not restart:    
         # freeze all layers, so the trainable layers are controlled
@@ -149,16 +171,13 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
                         callbacks = callback_list,
                         workers=1,
                         use_multiprocessing=True)
-    
-    print("Finished training layers: {} - {}".format(start_layer,stop_layer), flush=True)
 
     # print summary
     with open(output_dir + '/' + 'summary.txt','w') as fp:
         fp.write('Max epochs: '+ str(max_epochs)+'\n')
         fp.write('lr: '+ str(tensorboard.get_lr_hist())+'\n')
         fp.write('Batch size: '+ str(batch_size)+'\n')
-        fp.write('Starting layer: ' + str(start_layer)+'\n')
-        fp.write('Stopping layer: ' + str(stop_layer)+'\n')
+        fp.write('Training mode: ' + str(train_mode)+'\n')
         fp.write('Training accuracy: ' + str(history.history['acc'])+'\n')
         fp.write('Validation accuracy: ' + str(history.history['val_acc'])+'\n')
     
@@ -249,9 +268,13 @@ if __name__ == "__main__":
                         type=int,
                         default=32)
                         
-    parser.add_argument('-input_model', 
+    parser.add_argument('-restart_model', 
                         help='Path to .h5 model to train last layers',
                         default=None)
+
+    parser.add_argument('-input_model', 
+                        help='Path to .h5 model to initialize instance-based network',
+                        default=None)                    
     
     parser.add_argument('-restart', 
                         help='Make sure that the model use loaded learn rate and architecture (model wont be compiled)',
@@ -283,7 +306,8 @@ if __name__ == "__main__":
                         max_epochs=args.epochs, 
                         lr=args.lr, 
                         batch_size=args.batch_size,
-                        lr_plateau=args.lr_plateau, 
+                        lr_plateau=args.lr_plateau,
+                        restart_model=args.restart_model, 
                         input_model=args.input_model,
                         train_mode=args.train_mode,
                         clf_dropout=args.dropout,
