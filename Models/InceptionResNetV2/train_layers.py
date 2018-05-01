@@ -46,7 +46,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             inp_slice_1= Lambda(lambda image: image[:,:128,:],name='image_slice')(inp)
             inp_slice_2 = Lambda(lambda image: image[:,128:,:],name='image_slice')(inp)
 
-            # create two new branches from pretrained imagenet weights
+            # create two branches from pretrained imagenet weights
             if input_model is None:
                 model_1 = InceptionResNetV2(input_tensor=inp_slice_1,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
                 model_2 = InceptionResNetV2(input_tensor=inp_slice_2,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
@@ -57,12 +57,12 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
                 avg_pool = model_template.get_layer('global_average_pooling2d')
 
                 # create the two branches
-                model1 = Model(input=model_template.input, output=avg_pool)
-                model2 = Model(input=model_template.input, output=avg_pool)
+                model_1 = Model(input=model_template.input, output=avg_pool)
+                model_2 = Model(input=model_template.input, output=avg_pool)
 
                 # propagate an input slice to each branch
-                model1.input_tensor = inp_slice_1
-                model2.input_tensor = inp_slice_2
+                model_1.input_tensor = inp_slice_1
+                model_2.input_tensor = inp_slice_2
 
             # create first branch
             model_1.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
