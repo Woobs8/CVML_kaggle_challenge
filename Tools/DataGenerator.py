@@ -58,7 +58,8 @@ class DataGenerator(Sequence):
             
     def __len__(self):
         'Denotes the number of batches per epoch'
-        return int(np.ceil(self.num_images / self.batch_size)) 
+        return int(np.ceil(self.num_images / self.batch_size))
+
 
     def __data_generation(self):
         'Generates data containing batch_size samples'
