@@ -19,7 +19,7 @@ from keras.layers import Lambda, Input, GlobalMaxPooling2D
 from keras.callbacks import History 
 K.set_image_data_format('channels_last')
 
-def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_path, max_epochs, lr, batch_size, start_layer, stop_layer, lr_plateau =[5,0.01,1,0.000001], early_stop=[3,0.01], clf_dropout=0.2, input_model=None, print_model_summary_only=False, use_resize=False, restart=False,histogram_graphs=False):
+def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_path, max_epochs, lr, batch_size, train_mode, lr_plateau =[5,0.01,1,0.000001], early_stop=[3,0.01], clf_dropout=0.2, input_model=None, print_model_summary_only=False, use_resize=False, restart=False, histogram_graphs=False, instance_based=False):
     # load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
@@ -38,26 +38,53 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
     # no input model specified - generate new model
     if input_model is None:
         # add resize layer to fit images for InceptionResNetV2 input layer (299x299)
-        if use_resize:
+        if instance_based:
+            # Create Input Tensor
             inp = Input(shape=(None, None, 3),name='image_input')
-            inp_resize = Lambda(lambda image: K.tf.image.resize_images(image, (299, 299), K.tf.image.ResizeMethod.BICUBIC),name='image_resize')(inp)
-            resize = Model(inp,inp_resize)
-            
-            # get the InceptionResNetV2 model and add it on top of the resize layer
-            model = InceptionResNetV2(input_tensor=resize.output, weights = "imagenet", include_top=False) 
-        # use original image sizes
-        else:
-            # get the InceptionResNetV2 model
-            model = InceptionResNetV2(weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
+            # First Branch
+            inp_slice_1= Lambda(lambda image: image[:,:len(image)/2,:],name='image_slice_1')(inp)
+            model_1 = InceptionResNetV2(input_tensor=inp_slice_1,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
+            model_1.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
+            for layer in model_1.layers:
+                layer.name = name + "_1"
+            dropout_1 = layers.Dropout(clf_dropout,name='dropout_1')(model_1.output)
+
+            # Second Branch
+            inp_slice_2 = Lambda(lambda image: image[:,len(image)/2:,:],name='image_slice_2')(inp)
+            model_2 = InceptionResNetV2(input_tensor=inp_slice_2,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
+            model_2.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
+            for layer in model_1.layers:
+                layer.name = name + "_2"
+            dropout_2 = layers.Dropout(clf_dropout,name='dropout_2')(model_2.output)
+            # Merge Branches
+            merged_branches = layers.concatenate([dropout_1, dropout_2], axis=-1)
+            # Predictions
+            predictions = layers.Dense(num_classes, activation="softmax", name='predictions')(merged_branches)
+            # Create Final Model
+            final_model = Model(input = inp, output = predictions)
         
-        # create classifier - InceptionResNetV2 only uses an average pooling layer and a softmax classifier on top
-        # Some articles mention that a dropout layer of 0.2 is used between the pooling layer and the softmax layer
-        avg_pool = layers.GlobalAveragePooling2D(name='avg_pool')(model.output)
-        dropout = layers.Dropout(clf_dropout,name='dropout1')(avg_pool)
-        predictions = layers.Dense(num_classes, activation="softmax", name='predictions')(dropout)
-        final_model = Model(input = model.input, output = predictions)
-    
-    # load input model
+        else:
+            if use_resize:
+                inp = Input(shape=(None, None, 3),name='image_input')
+                inp_resize = Lambda(lambda image: K.tf.image.resize_images(image, (299, 299), K.tf.image.ResizeMethod.BICUBIC),name='image_resize')(inp)
+                resize = Model(inp,inp_resize)
+                # get the InceptionResNetV2 model and add it on top of the resize layer
+                base_model = InceptionResNetV2(input_tensor=resize.output, pooling='avg', weights = "imagenet", include_top=False) 
+
+            else: # use original image sizes
+                # get the InceptionResNetV2 model
+                base_model = InceptionResNetV2(weights = "imagenet", pooling='avg' , include_top=False, input_shape = (256, 256, 3))
+            
+            # create classifier - InceptionResNetV2 only uses an average pooling layer and a softmax classifier on top
+            # Some articles mention that a dropout layer of 0.2 is used between the pooling layer and the softmax layer
+            base_model.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
+            clf = layers.Dropout(clf_dropout, name="dropout1")(base_model.output)
+            predictions = layers.Dense(num_classes, activation="softmax" ,name="predictions")(clf)
+
+            # Concatenate The Base And the Top Model
+            final_model = Model(input = base_model.input, output = predictions)
+
+
     else:
         print("Using existing model: {}".format(input_model))
         final_model = load_model(input_model)
@@ -65,6 +92,8 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
     if not restart:    
         # freeze all layers, so the trainable layers are controlled
         for layer in final_model.layers:
+            if layer.name == "dropout1" or layer.name == "dropout_1" or layer.name == "dropout_2" :
+                layer.rate = clf_dropout
             layer.trainable = False
         
     
@@ -97,14 +126,14 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
     
     if not restart:
         # set trainable layers
-        start_layer_idx = [i for i,j in enumerate(final_model.layers) if j.name==start_layer][0]
-        stop_layer_idx = [i for i,j in enumerate(final_model.layers) if j.name==stop_layer][0]
-        
-        for layer in final_model.layers[stop_layer_idx:start_layer_idx+1]:
-            layer.trainable = True
+        if train_mode == "predictions":
+            final_model.get_layer("predictions").trainable=True
+        else:
+            for layer in final_model.layers:
+                layer.trainable = True
                 
         # compile the model 
-        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
+        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.adamax(lr=lr), metrics=["accuracy"])
 
     # print model summary and stop if specified
     final_model.summary()
@@ -113,7 +142,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
 
     # fit model
     final_model.fit_generator(train_generator,
-                        steps_per_epoch = len(training_labels)/batch_size,
+                        steps_per_epoch = None,
                         epochs = max_epochs,
                         validation_data = val_generator,
                         validation_steps = val_steps,
@@ -169,16 +198,16 @@ if __name__ == "__main__":
                         required=True)
 
     # only allow model to train whole inception "blocks"
-    allowed_layers = ['predictions','mixed_7a','mixed_6a','mixed_5b','conv2d_1']
-    parser.add_argument('-stop_layer', 
+    allowed_layers = ['prediction','full']
+    parser.add_argument('-train_mode', 
                         help='Layer to stop training from (layer is included in training). Limited to beginning of inception blocks',
                         required=True,
                         choices=allowed_layers)
-
-    parser.add_argument('-start_layer', 
-                        help='Layer to start training from (layer is included in training). Limited to beginning of inception blocks',
-                        required=True,
-                        choices=allowed_layers)  
+    
+    parser.add_argument('-inst_based', 
+                        help='Instance Based Prediction Network',
+                        type=str2bool,
+                        default=False)
 
     parser.add_argument('-epochs', 
                         help='Max number of epochs to run',
@@ -256,12 +285,12 @@ if __name__ == "__main__":
                         batch_size=args.batch_size,
                         lr_plateau=args.lr_plateau, 
                         input_model=args.input_model,
-                        start_layer=args.start_layer,
-                        stop_layer=args.stop_layer,
+                        train_mode=args.train_mode,
                         clf_dropout=args.dropout,
                         print_model_summary_only=args.summary_only,
                         use_resize=args.use_resize,
                         restart=args.restart,
                         early_stop=args.early_stop,
                         tb_path=args.tb_path,
-                        histogram_graphs=args.histogram_graphs)
+                        histogram_graphs=args.histogram_graphs,
+                        instance_based=args.inst_based)
