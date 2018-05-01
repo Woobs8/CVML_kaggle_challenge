@@ -40,11 +40,11 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
         # add resize layer to fit images for InceptionResNetV2 input layer (299x299)
         if instance_based:
             # create input tensor
-            inp = Input(shape=(None, None, 3),name='image_input')
+            inp = Input(shape=(256, 512, 3),name='image_input')
 
             # slice input tensor to split the two images
-            inp_slice_1= Lambda(lambda image: image[:,:128,:],name='image_slice')(inp)
-            inp_slice_2 = Lambda(lambda image: image[:,128:,:],name='image_slice')(inp)
+            inp_slice_1= Lambda(lambda image: image[:,:256,:],name='image_slice_1')(inp)
+            inp_slice_2 = Lambda(lambda image: image[:,256:,:],name='image_slice_2')(inp)
 
             # create two branches from pretrained imagenet weights
             if input_model is None:
@@ -122,8 +122,9 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
     # data generators
     train_generator = DataGenerator(path_to_images=train_data,
                                     labels=cat_train_labels, 
-                                    batch_size=batch_size)
-    if histogram_graphs: 
+                                    batch_size=batch_size,
+                                    instance_based=instance_based)
+    if histogram_graphs and not instance_based:
         # If we want histogram graphs we must pass all val images as numpy array
         hist_frq = 1
         validation_images = image_reader(val_data)*(1./255)
@@ -134,7 +135,8 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
         val_steps = len(validation_labels)/batch_size
         val_generator = DataGenerator(  path_to_images=val_data,
                                         labels=cat_val_labels, 
-                                        batch_size=batch_size)
+                                        batch_size=batch_size,
+                                        instance_based=instance_based)
     
     # define model keras callbacks 
     checkpoint = ModelCheckpoint(filepath=output_dir+"/checkpoint.h5", monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', period=1)
