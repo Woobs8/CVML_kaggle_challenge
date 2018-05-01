@@ -40,9 +40,9 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
         # add resize layer to fit images for InceptionResNetV2 input layer (299x299)
         if instance_based:
             # Create Input Tensor
-            inp = Input(shape=(None, None, 3),name='image_input')
+            inp = Input(shape=(256, 256*2, 3),name='image_input')
             # First Branch
-            inp_slice_1= Lambda(lambda image: image[:,:128,:],name='image_slice')(inp)
+            inp_slice_1= Lambda(lambda image: image[:,:,:256,:],name='image_slice')(inp)
             model_1 = InceptionResNetV2(input_tensor=inp_slice_1,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
             model_1.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
             for layer in model_1.layers:
@@ -50,7 +50,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             dropout_1 = layers.Dropout(clf_dropout,name='dropout_1')(model_1.output)
 
             # Second Branch
-            inp_slice_2 = Lambda(lambda image: image[:,128:,:],name='image_slice')(inp)
+            inp_slice_2 = Lambda(lambda image: image[:,:,256:,:],name='image_slice')(inp)
             model_2 = InceptionResNetV2(input_tensor=inp_slice_2,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
             model_2.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
             for layer in model_2.layers:
@@ -100,8 +100,9 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
     # data generators
     train_generator = DataGenerator(path_to_images=train_data,
                                     labels=cat_train_labels, 
-                                    batch_size=batch_size)
-    if histogram_graphs: 
+                                    batch_size=batch_size,
+                                    instance_based=instance_based)
+    if histogram_graphs and not instance_based: 
         # If we want histogram graphs we must pass all val images as numpy array
         hist_frq = 1
         validation_images = image_reader(val_data)*(1./255)
@@ -112,7 +113,8 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
         val_steps = len(validation_labels)/batch_size
         val_generator = DataGenerator(  path_to_images=val_data,
                                         labels=cat_val_labels, 
-                                        batch_size=batch_size)
+                                        batch_size=batch_size,
+                                        instance_based=instance_based)
     
     # define model keras callbacks 
     checkpoint = ModelCheckpoint(filepath=output_dir+"/checkpoint.h5", monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', period=1)
