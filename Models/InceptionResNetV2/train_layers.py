@@ -6,7 +6,7 @@ sys.path.insert(1, os.path.join(sys.path[0], '..','..'))
 import argparse
 import numpy as np
 from keras import optimizers,layers,regularizers
-from keras.models import Model, load_model
+from keras.models import Model, load_model, clone_model
 from keras.utils import to_categorical
 from keras.applications import InceptionResNetV2
 from Tools.DataGenerator import DataGenerator
@@ -19,7 +19,7 @@ from keras.layers import Lambda, Input, GlobalMaxPooling2D
 from keras.callbacks import History 
 K.set_image_data_format('channels_last')
 
-def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_path, max_epochs, lr, batch_size, train_mode, lr_plateau =[5,0.01,1,0.000001], early_stop=[3,0.01], clf_dropout=0.2, input_model=None, print_model_summary_only=False, use_resize=False, restart=False, histogram_graphs=False, instance_based=False):
+def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_path, max_epochs, lr, batch_size, train_mode, lr_plateau =[5,0.01,1,0.000001], early_stop=[3,0.01], clf_dropout=0.2, restart_model=None, input_model=None, print_model_summary_only=False, use_resize=False, restart=False, histogram_graphs=False, instance_based=False):
     # load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
@@ -36,31 +36,75 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
     cat_val_labels = to_categorical(validation_labels)
 
     # no input model specified - generate new model
-    if input_model is None:
+    if restart_model is None:
         # add resize layer to fit images for InceptionResNetV2 input layer (299x299)
         if instance_based:
-            # Create Input Tensor
-            inp = Input(shape=(256, 256*2, 3),name='image_input')
-            # First Branch
-            inp_slice_1= Lambda(lambda image: image[:,:,:256,:],name='image_slice')(inp)
-            model_1 = InceptionResNetV2(input_tensor=inp_slice_1,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
-            model_1.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
-            for layer in model_1.layers:
-                layer.name = layer.name + "_1"
-            dropout_1 = layers.Dropout(clf_dropout,name='dropout_1')(model_1.output)
 
-            # Second Branch
-            inp_slice_2 = Lambda(lambda image: image[:,:,256:,:],name='image_slice')(inp)
+            # create input tensor
+            inp = Input(shape=(256, 512, 3),name='image_input')
+
+            # slice input tensor to split the two images
+            inp_slice_1 = Lambda(lambda image: image[:,:,:256,:],name='image_slice_1', output_shape=(256,256,3))(inp)
+            inp_slice_2 = Lambda(lambda image: image[:,:,256:,:],name='image_slice_2', output_shape=(256,256,3))(inp)
+
+            # create two branches from pretrained imagenet weights
+
+            model_1 = InceptionResNetV2(input_tensor=inp_slice_1,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
+            start_weights = model_1.get_weights()
             model_2 = InceptionResNetV2(input_tensor=inp_slice_2,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
+            # load input model, pop classification layers and split into two branches
+            if input_model is not None:
+                # branch 1
+                model_1.load_weights(input_model, by_name=True)      
+                #model_1 = load_model(input_model)
+                #model_1.save_weights("/workspace/workspace/inception_resnet/fine_tune_rasmus_keras_restart/weights.h5")
+                #model_1.name = "model_1"
+                #model_1.layers.pop() # dense
+                #model_1.layers.pop() # dropout
+                #model_1.outputs = [model_1.layers[-1].output]
+                #model_1.output_layers = [model_1.layers[-1]]
+                #model_1.layers[-1].outbound_nodes = []
+                #for layer in model_1.layers:
+                #    layer.name = layer.name+"_1"
+                #model_1.summry()
+                #return
+                #model_1 = model_1(inp_slice_1)
+                #model_1 = Model(input=inp, output=model_1)
+
+                # branch 2
+                model_2.load_weights(input_model, by_name=True)
+                #model_2 = load_model(input_model)
+                #model_2.name = "model_2"
+                #model_2.layers.pop() # dense
+                #model_2.layers.pop() # dropout
+                #model_2.outputs = [model_2.layers[-1].output]
+                #model_2.output_layers = [model_2.layers[-1]]
+                #model_2.layers[-1].outbound_nodes = []
+                #for layer in model_2.layers:
+                #    layer.name = layer.name+"_2"
+                #model_2 = model_2(inp_slice_2)
+                #model_2 = Model(input=inp, output=model_2)
+
+            # create first branch            
+            model_1.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
+            dropout_1 = layers.Dropout(clf_dropout,name='dropout_1')(model_1.output)
+            for layer in model_1.layers:
+                layer.name = layer.name+"_1"
+
+            # create second branch
+
             model_2.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
-            for layer in model_2.layers:
-                layer.name = layer.name + "_2"
             dropout_2 = layers.Dropout(clf_dropout,name='dropout_2')(model_2.output)
-            # Merge Branches
+            for layer in model_2.layers:
+                layer.name = layer.name+"_2"
+           
+            # merge branches before classification layer
             merged_branches = layers.concatenate([dropout_1, dropout_2], axis=-1)
-            # Predictions
+            
+            # add classifier
             predictions = layers.Dense(num_classes, activation="softmax", name='predictions')(merged_branches)
-            # Create Final Model
+            
+            # create final model
             final_model = Model(input = inp, output = predictions)
         
         else:
@@ -86,14 +130,15 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
 
 
     else:
-        print("Using existing model: {}".format(input_model))
-        final_model = load_model(input_model)
+        print("Using existing model: {}".format(restart_model))
+        final_model = load_model(restart_model)
 
     if not restart:    
         # freeze all layers, so the trainable layers are controlled
         for layer in final_model.layers:
             if layer.name == "dropout1" or layer.name == "dropout_1" or layer.name == "dropout_2" :
                 layer.rate = clf_dropout
+                
             layer.trainable = False
         
     
@@ -102,7 +147,9 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
                                     labels=cat_train_labels, 
                                     batch_size=batch_size,
                                     instance_based=instance_based)
-    if histogram_graphs and not instance_based: 
+    
+    if histogram_graphs and not instance_based:
+
         # If we want histogram graphs we must pass all val images as numpy array
         hist_frq = 1
         validation_images = image_reader(val_data)*(1./255)
@@ -134,6 +181,8 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             for layer in final_model.layers:
                 layer.trainable = True
                 
+                
+                
         # compile the model 
         final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.adamax(lr=lr), metrics=["accuracy"])
 
@@ -151,16 +200,13 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
                         callbacks = callback_list,
                         workers=1,
                         use_multiprocessing=True)
-    
-    print("Finished training layers: {} - {}".format(start_layer,stop_layer), flush=True)
 
     # print summary
     with open(output_dir + '/' + 'summary.txt','w') as fp:
         fp.write('Max epochs: '+ str(max_epochs)+'\n')
         fp.write('lr: '+ str(tensorboard.get_lr_hist())+'\n')
         fp.write('Batch size: '+ str(batch_size)+'\n')
-        fp.write('Starting layer: ' + str(start_layer)+'\n')
-        fp.write('Stopping layer: ' + str(stop_layer)+'\n')
+        fp.write('Training mode: ' + str(train_mode)+'\n')
         fp.write('Training accuracy: ' + str(history.history['acc'])+'\n')
         fp.write('Validation accuracy: ' + str(history.history['val_acc'])+'\n')
     
@@ -200,7 +246,7 @@ if __name__ == "__main__":
                         required=True)
 
     # only allow model to train whole inception "blocks"
-    allowed_layers = ['prediction','full']
+    allowed_layers = ['predictions','full']
     parser.add_argument('-train_mode', 
                         help='Layer to stop training from (layer is included in training). Limited to beginning of inception blocks',
                         required=True,
@@ -251,9 +297,13 @@ if __name__ == "__main__":
                         type=int,
                         default=32)
                         
-    parser.add_argument('-input_model', 
+    parser.add_argument('-restart_model', 
                         help='Path to .h5 model to train last layers',
                         default=None)
+
+    parser.add_argument('-input_model', 
+                        help='Path to .h5 model to initialize instance-based network',
+                        default=None)                    
     
     parser.add_argument('-restart', 
                         help='Make sure that the model use loaded learn rate and architecture (model wont be compiled)',
@@ -285,7 +335,8 @@ if __name__ == "__main__":
                         max_epochs=args.epochs, 
                         lr=args.lr, 
                         batch_size=args.batch_size,
-                        lr_plateau=args.lr_plateau, 
+                        lr_plateau=args.lr_plateau,
+                        restart_model=args.restart_model, 
                         input_model=args.input_model,
                         train_mode=args.train_mode,
                         clf_dropout=args.dropout,
