@@ -74,7 +74,6 @@ class DataGenerator(Sequence):
             batch = batch[0:self.batch_size-self.idx]
         # Current labels and samples
         curr_list = self.img_list[self.permutation]
-        print(curr_list[batch])
         curr_labels = self.labels[self.permutation]
         # Load images in numpy array
         X = np.array([np.array(imread(curr_list[img_idx])) for img_idx in batch])
