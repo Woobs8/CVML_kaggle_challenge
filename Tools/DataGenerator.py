@@ -1,4 +1,6 @@
 import numpy as np
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
 from scipy.misc import imread
 from Tools.ImageReader import create_image_lists
 from keras.utils import Sequence
@@ -27,7 +29,7 @@ class DataGenerator(Sequence):
         self.permutation = np.arange(self.num_images)
         # Data Generator
         if use_augment:
-            self.datagen = ImageDataGenerator(  
+                self.datagen = ImageDataGenerator(  
                 rescale = 1./255,
                 horizontal_flip = True,
                 vertical_flip=True,
@@ -48,7 +50,7 @@ class DataGenerator(Sequence):
         'Updates image list after each epoch'
         if self.shuffle:
             # Random shuffle
-            if self.instance_based:
+            if not self.instance_based:
                 self.permutation = np.random.permutation(self.num_images)
             else:
                 inst_perm = np.random.permutation(int(self.num_images/2))
@@ -72,6 +74,7 @@ class DataGenerator(Sequence):
             batch = batch[0:self.batch_size-self.idx]
         # Current labels and samples
         curr_list = self.img_list[self.permutation]
+        print(curr_list[batch])
         curr_labels = self.labels[self.permutation]
         # Load images in numpy array
         X = np.array([np.array(imread(curr_list[img_idx])) for img_idx in batch])
@@ -92,12 +95,14 @@ class DataGenerator(Sequence):
 
     def __augment_images__(self,X,y):
         for X_batch, y_batch in self.datagen.flow(X, y, 
-                                        batch_size=self.batch_size):
+                                        batch_size=self.batch_size,
+                                        shuffle=False):
             break
         if self.instance_based:
             if len(X_batch) % 2 != 0:
                 raise ValueError("Batch size must be even numbered to use instance based")
             perm = np.random.permutation(2)
             X_batch = np.array([np.concatenate((X_batch[2*idx+perm[0]],X_batch[2*idx+perm[1]]),axis=1) for idx in range(int(self.batch_size / 2))])
-            y_batch = y_batch[::2]
+            y_batch = y_batch[::2]            
+
         return X_batch, y_batch
