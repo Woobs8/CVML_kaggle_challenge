@@ -39,6 +39,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
     if restart_model is None:
         # add resize layer to fit images for InceptionResNetV2 input layer (299x299)
         if instance_based:
+
             # create input tensor
             inp = Input(shape=(256, 512, 3),name='image_input')
 
@@ -47,6 +48,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             inp_slice_2 = Lambda(lambda image: image[:,:,256:,:],name='image_slice_2', output_shape=(256,256,3))(inp)
 
             # create two branches from pretrained imagenet weights
+
             model_1 = InceptionResNetV2(input_tensor=inp_slice_1,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
             start_weights = model_1.get_weights()
             model_2 = InceptionResNetV2(input_tensor=inp_slice_2,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
@@ -90,6 +92,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
                 layer.name = layer.name+"_1"
 
             # create second branch
+
             model_2.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
             dropout_2 = layers.Dropout(clf_dropout,name='dropout_2')(model_2.output)
             for layer in model_2.layers:
@@ -144,7 +147,9 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
                                     labels=cat_train_labels, 
                                     batch_size=batch_size,
                                     instance_based=instance_based)
+    
     if histogram_graphs and not instance_based:
+
         # If we want histogram graphs we must pass all val images as numpy array
         hist_frq = 1
         validation_images = image_reader(val_data)*(1./255)
