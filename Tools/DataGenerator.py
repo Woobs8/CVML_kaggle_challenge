@@ -29,7 +29,7 @@ class DataGenerator(Sequence):
         self.permutation = np.arange(self.num_images)
         # Data Generator
         if use_augment:
-                self.datagen = ImageDataGenerator(  
+            self.datagen = ImageDataGenerator(  
                 rescale = 1./255,
                 horizontal_flip = True,
                 vertical_flip=True,
