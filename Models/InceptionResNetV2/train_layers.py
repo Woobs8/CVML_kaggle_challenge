@@ -6,7 +6,7 @@ sys.path.insert(1, os.path.join(sys.path[0], '..','..'))
 import argparse
 import numpy as np
 from keras import optimizers,layers,regularizers
-from keras.models import Model, load_model
+from keras.models import Model, load_model, clone_model
 from keras.utils import to_categorical
 from keras.applications import InceptionResNetV2
 from Tools.DataGenerator import DataGenerator
@@ -43,38 +43,57 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             inp = Input(shape=(256, 512, 3),name='image_input')
 
             # slice input tensor to split the two images
-            inp_slice_1= Lambda(lambda image: image[:,:256,:],name='image_slice_1')(inp)
-            inp_slice_2 = Lambda(lambda image: image[:,256:,:],name='image_slice_2')(inp)
+            inp_slice_1 = Lambda(lambda image: image[:,:,:256,:],name='image_slice_1', output_shape=(256,256,3))(inp)
+            inp_slice_2 = Lambda(lambda image: image[:,:,256:,:],name='image_slice_2', output_shape=(256,256,3))(inp)
 
             # create two branches from pretrained imagenet weights
-            if input_model is None:
-                model_1 = InceptionResNetV2(input_tensor=inp_slice_1,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
-                model_2 = InceptionResNetV2(input_tensor=inp_slice_2,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
-            # load input model and split into two branches
-            else:
-                # load model, pop classification layers
-                model_template = load_model(input_model)
-                avg_pool = model_template.get_layer('global_average_pooling2d')
+            model_1 = InceptionResNetV2(input_tensor=inp_slice_1,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
+            start_weights = model_1.get_weights()
+            model_2 = InceptionResNetV2(input_tensor=inp_slice_2,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
+            # load input model, pop classification layers and split into two branches
+            if input_model is not None:
+                # branch 1
+                model_1.load_weights(input_model, by_name=True)      
+                #model_1 = load_model(input_model)
+                #model_1.save_weights("/workspace/workspace/inception_resnet/fine_tune_rasmus_keras_restart/weights.h5")
+                #model_1.name = "model_1"
+                #model_1.layers.pop() # dense
+                #model_1.layers.pop() # dropout
+                #model_1.outputs = [model_1.layers[-1].output]
+                #model_1.output_layers = [model_1.layers[-1]]
+                #model_1.layers[-1].outbound_nodes = []
+                #for layer in model_1.layers:
+                #    layer.name = layer.name+"_1"
+                #model_1.summry()
+                #return
+                #model_1 = model_1(inp_slice_1)
+                #model_1 = Model(input=inp, output=model_1)
 
-                # create the two branches
-                model_1 = Model(input=model_template.input, output=avg_pool)
-                model_2 = Model(input=model_template.input, output=avg_pool)
+                # branch 2
+                model_2.load_weights(input_model, by_name=True)
+                #model_2 = load_model(input_model)
+                #model_2.name = "model_2"
+                #model_2.layers.pop() # dense
+                #model_2.layers.pop() # dropout
+                #model_2.outputs = [model_2.layers[-1].output]
+                #model_2.output_layers = [model_2.layers[-1]]
+                #model_2.layers[-1].outbound_nodes = []
+                #for layer in model_2.layers:
+                #    layer.name = layer.name+"_2"
+                #model_2 = model_2(inp_slice_2)
+                #model_2 = Model(input=inp, output=model_2)
 
-                # propagate an input slice to each branch
-                model_1.input_tensor = inp_slice_1
-                model_2.input_tensor = inp_slice_2
-
-            # create first branch
+            # create first branch            
             model_1.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
-            for layer in model_1.layers:
-                layer.name = layer.name + "_1"
             dropout_1 = layers.Dropout(clf_dropout,name='dropout_1')(model_1.output)
+            for layer in model_1.layers:
+                layer.name = layer.name+"_1"
 
             # create second branch
             model_2.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
-            for layer in model_2.layers:
-                layer.name = layer.name + "_2"
             dropout_2 = layers.Dropout(clf_dropout,name='dropout_2')(model_2.output)
+            for layer in model_2.layers:
+                layer.name = layer.name+"_2"
            
             # merge branches before classification layer
             merged_branches = layers.concatenate([dropout_1, dropout_2], axis=-1)
@@ -116,6 +135,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
         for layer in final_model.layers:
             if layer.name == "dropout1" or layer.name == "dropout_1" or layer.name == "dropout_2" :
                 layer.rate = clf_dropout
+                
             layer.trainable = False
         
     
@@ -155,6 +175,8 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
         else:
             for layer in final_model.layers:
                 layer.trainable = True
+                
+                
                 
         # compile the model 
         final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.adamax(lr=lr), metrics=["accuracy"])
@@ -219,7 +241,7 @@ if __name__ == "__main__":
                         required=True)
 
     # only allow model to train whole inception "blocks"
-    allowed_layers = ['prediction','full']
+    allowed_layers = ['predictions','full']
     parser.add_argument('-train_mode', 
                         help='Layer to stop training from (layer is included in training). Limited to beginning of inception blocks',
                         required=True,
