@@ -9,7 +9,7 @@ from keras.preprocessing.image import ImageDataGenerator
 
 class DataGenerator(Sequence):
     'Generates data for Keras'
-    def __init__(self, path_to_images, labels=None, shuffle=True, batch_size=32, use_augment=False, instance_based=False,predict_aug_size=None):
+    def __init__(self, path_to_images, labels=None, shuffle=True, batch_size=32, use_augment=False, instance_based=False,predict_aug_size=1):
         'Initialization'
         # Store arguments
         if instance_based:
@@ -23,14 +23,17 @@ class DataGenerator(Sequence):
         # Store Labels
         if labels == None: # return original index instead
             self.labels = np.arange(self.num_images)
+            # Array to store the returned images ID (idx) when predicting
         else:
             self.labels = labels
+        
         # Initialize Index To 0
         self.idx = 0
         # Shuffle
         self.shuffle = shuffle
         # Current arrangement of samples
         self.permutation = np.arange(self.num_images)
+        
         # Data Generator
         if use_augment:
             self.datagen = ImageDataGenerator(  
@@ -45,12 +48,12 @@ class DataGenerator(Sequence):
             self.datagen = ImageDataGenerator(  
                 rescale = 1./255,
                 data_format="channels_last")
+        
         # Instance based generator
         self.instance_based = instance_based
         # Predic Aug
-        if predict_aug_size == None or predict_aug_size < 1:
+        if predict_aug_size < 1:
             self.predict_aug_size = 1
-        
         self.predict_aug_size = predict_aug_size
         # Initialize First Epoch
         self.on_epoch_end()
@@ -69,7 +72,7 @@ class DataGenerator(Sequence):
             
     def __len__(self):
         'Denotes the number of batches per epoch'
-        return int(np.ceil(self.num_images / self.batch_size))
+        return 2#int(np.ceil(self.num_images / self.batch_size))
 
 
     def __data_generation(self):
@@ -119,6 +122,6 @@ class DataGenerator(Sequence):
                 raise ValueError("Batch size must be even numbered to use instance based")
             perm = np.random.permutation(2)
             X_batch = np.array([np.concatenate((X_batch[2*idx+perm[0]],X_batch[2*idx+perm[1]]),axis=1) for idx in range(int(len(X_batch) / 2))])
-            y_batch = y_batch[::2]            
+            y_batch = y_batch[::2]
 
         return X_batch, y_batch

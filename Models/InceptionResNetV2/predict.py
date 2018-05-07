@@ -8,6 +8,7 @@ import numpy as np
 from keras.models import Model, load_model
 from Tools.DataWriter import write_predictions_file
 from Tools.ImageReader import image_reader
+from Tools.DataGenerator import DataGenerator
 from keras import backend as K
 import re
 import tensorflow as tf
@@ -30,123 +31,163 @@ def predict(test_data, model_path, output_dir):
     write_predictions_file(prediction,output_dir)
 
 
-def instance_predict(test_data, model_path, output_dir, decision):
+def instance_predict(test_data, model_path, output_dir, decision, dual_mode):
     print("Running non-augmented instance-based predictions")
-    # Load data
-    X_test = image_reader(test_data) * (1./255)
-    num_test, h, w, c = X_test.shape
-    
     # load pre-trained model
     final_model = load_model(model_path)
     final_model.summary()
+    
+    # Data Generator
+    batch_size = 32
+    pred_gen = DataGenerator(   path_to_images=test_data,
+                                batch_size=batch_size,
+                                shuffle=False,
+                                use_augment=False,
+                                instance_based=dual_mode)
 
     # predict
-    prob_test = final_model.predict(X_test,verbose=1)
+    prob_test = []
+    id_prob = []
+    num_test = pred_gen.num_images
+    num_steps = pred_gen.__len__()
+    for idx in range(num_steps):
+        X_batch, id_batch = pred_gen.__getitem__(idx)
+        prob_test.append(np.exp(final_model.predict_on_batch(X_batch)))
+        id_prob.append(id_batch)
+        
+        # Print Progress
+        factor1 = int(np.ceil(idx*1./(num_steps-1) * 30))
+        factor2 = int(np.floor((1-idx*1./(num_steps-1)) * 30))
+        print_string = 'Step '+ str(idx+1) + ' / ' + str(num_steps) + ' : [' + '=' * factor1 + '>' + ' ' * factor2+ ']'
+        if idx < num_steps-1:
+            print(print_string, end="\r", flush=True)
+        else:
+            print(print_string, flush=True)
 
-    idx = 0
+    prob_test = np.vstack(prob_test)
+    id_prob = np.hstack(id_prob)
     prob = np.zeros((num_test,29))
-    for img1, img2 in zip(prob_test[:-1:2], prob_test[1::2]):
-        if decision == 'average':
-            avg_prob = np.exp(np.add(img1,img2) / 2)
-            prob[idx,:] = avg_prob
-            idx += 1
-            prob[idx,:] = avg_prob
-            idx += 1
-        elif decision == 'highest':
-            img1_max = np.amax(img1)
-            img2_max = np.amax(img2)
+    if not dual_mode:
+        id_prob = id_prob - id_prob % 2 # Instance based every 2 images is the same sample. Rename the sample ids to [0 0 2 2 4 4 ...] from [0 1 2 3 4 5 ...]
 
-            if img1_max > img2_max:
-                prob[idx,:] = img1
-                idx += 1
-                prob[idx,:] = img1
-            else:
-                prob[idx,:] = img2
-                idx += 1
-                prob[idx,:] = img2
-            idx += 1         
-    prediction = np.argmax(prob,axis=1) + 1
+        prob = np.zeros((num_test,29))
+        arg_max_rows = []
+        for idx in np.unique(id_prob):
+            if decision == 'average':
+                sum_prob = np.sum(prob_test[np.where(id_prob==idx)[0]],axis=0)  # sum probabilities across all columns (as we are only interested in the maximum, division is uncessary)
+                prob[idx] = sum_prob
+                prob[idx+1] = sum_prob
+            elif decision == 'highest':
+                index = np.unravel_index(np.argmax(prob_test[np.where(id_prob==idx)[0]], axis=None), prob_test.shape)   # find highest class probability
+                prob[idx,index[1]] = prob_test[index]                                                      #  assign most confident prediction to both images
+                prob[idx+1,index[1]] = prob_test[index]  
+    else:
+        for idx in np.unique(id_prob):
+            max_vals = np.amax(prob_test[np.where(id_prob==idx)[0]],axis=1)     # find highest class probability for each sample
+            prob[idx] = prob_test[np.argmax(max_vals)]                           #  assign most confident prediction to both images
+            prob[idx+1] = prob_test[np.argmax(max_vals)]   
+    
+    prediction = np.argmax(prob, axis=1) + 1
     
     # save predictions model
     write_predictions_file(prediction,output_dir)
 
 
-def aug_instance_predict(test_data, aug_test_data, model_path, output_dir, decision):
+def aug_instance_predict(test_data, aug_test_data, model_path, output_dir, decision, dual_mode, num_aug):
     print("Running augmented instance-based predictions")
-    # Load data
-    X_test = image_reader(test_data) * (1./255)
-    num_test, h, w, c = X_test.shape
 
-    # load augmented test data
-    is_root_dir = True
-    extensions = ['jpg', 'jpeg']
-    file_list = []
-    dir_name = os.path.basename(aug_test_data)
-    tf.logging.info("Looking for images in '" + dir_name + "'")
-    for extension in extensions:
-        file_glob = os.path.join(aug_test_data, '*.' + extension)
-        file_list.extend(tf.gfile.Glob(file_glob))
-    if not file_list:
-        tf.logging.warning('No files found')
-        return
-
-    aug_img_count = np.zeros(num_test)
-    for image in file_list:
-        image_num = int(re.search("(\d*\.?\d)",image).group(0))
-        aug_img_count[image_num-1] += 1
-    
-    X_aug_test = image_reader(aug_test_data) * (1./255)
-    
     # load pre-trained model
     final_model = load_model(model_path)
     final_model.summary()
 
-    # predict
-    prob_test = final_model.predict(X_test,verbose=1)
-    prob_aug_test = final_model.predict(X_aug_test,verbose=1)
+    # Data Generator original images
+    batch_size_org = 8
+    pred_gen_org = DataGenerator(   path_to_images=test_data,
+                                    batch_size=batch_size_org,
+                                    shuffle=False,
+                                    use_augment=False,
+                                    instance_based=dual_mode)
 
-    prediction = np.zeros(num_test)
-    aug_prob = np.zeros((num_test,29))
-    old_aug_idx = 0
-    new_aug_idx = 0
-    for idx, pred in enumerate(prob_test):
-        num_aug = aug_img_count[idx]
-        new_aug_idx += num_aug
-        aug_pred = prob_aug_test[int(old_aug_idx):int(new_aug_idx)]
-        old_aug_idx = new_aug_idx
+    # Data Generator augmented images
+    batch_size_aug = 8
+    pred_gen_aug = DataGenerator(   path_to_images=test_data,
+                                    batch_size=batch_size_aug,
+                                    shuffle=False,
+                                    use_augment=True,
+                                    instance_based=dual_mode,
+                                    predict_aug_size=num_aug)
+    # predict original images
+    prob_test = []
+    id_org = []
+    num_test = pred_gen_org.num_images
+    num_steps = pred_gen_org.__len__()
 
+    for idx in range(num_steps):
+        X_batch, id_batch = pred_gen_org.__getitem__(idx)
+        prob_test.append(np.exp(final_model.predict_on_batch(X_batch)))
+        id_org.append(id_batch)
+        # Print Progress
+        factor1 = int(np.ceil(idx*1./(num_steps-1) * 30))
+        factor2 = int(np.floor((1-idx*1./(num_steps-1)) * 30))
+        print_string = 'Step '+ str(idx+1) + ' / ' + str(num_steps) + ' : [' + '=' * factor1 + '>' + ' ' * factor2+ ']'
+        if idx < num_steps-1:
+            print(print_string, end="\r", flush=True)
+        else:
+            print(print_string, flush=True)
+
+    prob_test = np.vstack(prob_test)
+    id_org = np.hstack(id_org)
+
+    # predict on augmented images
+    prob_aug_test = []
+    id_aug = []
+    num_steps = pred_gen_aug.__len__()
+    for idx in range(num_steps):
+        X_batch, id_batch = pred_gen_aug.__getitem__(idx)
+        prob_aug_test.append(np.exp(final_model.predict_on_batch(X_batch)))
+        id_aug.append(id_batch)
+        # Print Progress
+        factor1 = int(np.ceil(idx*1./(num_steps-1) * 30))
+        factor2 = int(np.floor((1-idx*1./(num_steps-1)) * 30))
+        print_string = 'Step '+ str(idx+1) + ' / ' + str(num_steps) + ' : [' + '=' * factor1 + '>' + ' ' * factor2+ ']'
+        if idx < num_steps-1:
+            print(print_string, end="\r", flush=True)
+        else:
+            print(print_string, flush=True)
+    prob_aug_test = np.vstack(prob_aug_test)
+    id_aug = np.hstack(id_aug)
+    
+    # Concatenate original image preds and augmented image preds
+    agg_prob = np.concatenate((prob_test,prob_aug_test),axis = 0)
+
+    # Concatenate IDs  
+    if not dual_mode:
+        id_agg_prob = np.concatenate((id_org,id_aug))
+        id_agg_prob = id_agg_prob - id_agg_prob % 2 # Instance based every 2 images is the same sample. Rename the sample ids to [0 0 2 2 4 4 ...] from [0 1 2 3 4 5ª ...]
+    else:
+        id_agg_prob = np.concatenate((id_org,id_aug))
+    
+
+    # Calculate probabilites based on chosen method
+    prob = np.zeros((num_test,29))
+    for idx in np.unique(id_agg_prob):
         if decision == 'average':
-            sum_aug_pred = np.sum(aug_pred)
-            aug_prob[idx] = np.exp(np.add(pred,sum_aug_pred) / (num_aug+1))
+            sum_aug_prob = np.sum(agg_prob[np.where(id_agg_prob==idx)[0]],axis=0)  # sum probabilities across all columns (as we are only interested in the maximum, division is uncessary)
+            prob[idx] = sum_aug_prob                                
+            prob[idx+1] = sum_aug_prob
                 
         elif decision == 'highest':
-            pred = pred.reshape(1,29)
-            agg_preds = np.append(aug_pred,pred,axis=0)
-            max_vals = np.amax(agg_preds,axis=1)
-            aug_prob[idx] = agg_preds[np.argmax(max_vals)]
+            index = np.unravel_index(np.argmax(agg_prob[np.where(id_agg_prob==idx)[0]], axis=None), prob_test.shape)   # find highest class probability
+            prob[idx,index[1]] = agg_prob[index]                                                      #  assign most confident prediction to both images
+            prob[idx+1,index[1]] = agg_prob[index]  
 
-    idx = 0
-    prob = np.zeros((num_test,29))
-    for img1, img2 in zip(aug_prob[:-1:2], aug_prob[1::2]):
-        if decision == 'average':
-            avg_prob = np.exp(np.add(img1,img2) / 2)
-            prob[idx,:] = avg_prob
-            idx += 1
-            prob[idx,:] = avg_prob
-            idx += 1
-        elif decision == 'highest':
-            img1_max = np.amax(img1)
-            img2_max = np.amax(img2)
-
-            if img1_max > img2_max:
-                prob[idx,:] = img1
-                idx += 1
-                prob[idx,:] = img1
-            else:
-                prob[idx,:] = img2
-                idx += 1
-                prob[idx,:] = img2
-            idx += 1         
+        elif decision == 'weighted_average':
+            max_vals = np.amax(agg_prob[np.where(id_agg_prob==idx)[0]],axis=1)  # find highest class probability for each sample
+            weights = max_vals / np.amax(max_vals)                              # weigh the contribution of each sample, by its confidence in its prediction
+            prob[idx] = np.dot(weights,agg_prob)                                # assign weighted sum of all sample predictions to both images
+            prob[idx+1] = np.dot(weights,agg_prob)                              # (as we are only interested in the maximum, division is uncessary)
+    
+    # Calculate the actual predicted label    
     prediction = np.argmax(prob,axis=1) + 1
 
     # save predictions model
@@ -182,26 +223,37 @@ if __name__ == "__main__":
                         help='Use augmented images to aid classification',
                         action="store_true")
 
+    parser.add_argument('-num_aug',
+                        help='Number of augmented images for each original Image',
+                        type=int,
+                        default=5)
+
+    parser.add_argument('-dual_mode',
+                        help='Model to use must recieve \'stiched\' images (256*512*3)',
+                        action="store_true")
+
     parser.add_argument('-decision_mode',
                         help='how instances are used to aid classification',
                         nargs=1,
-                        choices=['average','highest'],
+                        choices=['average','highest','weighted_average'],
                         default=['average'])
     
     args = parser.parse_args()
-    
     if args.instance:
         if args.augmented:
             aug_instance_predict(test_data=args.test_data,
                             aug_test_data=args.aug_test_data,
                             model_path=args.input_model,
                             output_dir=args.output,
-                            decision=args.decision_mode[0])
+                            decision=args.decision_mode[0],
+                            dual_mode=args.dual_mode,
+                            num_aug=args.num_aug)
         else:
             instance_predict(test_data=args.test_data,
                             model_path=args.input_model,
                             output_dir=args.output,
-                            decision=args.decision_mode[0])
+                            decision=args.decision_mode[0],
+                            dual_mode=args.dual_mode)
     else:
         predict(test_data=args.test_data, 
                 model_path=args.input_model,
