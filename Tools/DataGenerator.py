@@ -9,20 +9,24 @@ from keras.preprocessing.image import ImageDataGenerator
 
 class DataGenerator(Sequence):
     'Generates data for Keras'
-    def __init__(self, path_to_images, labels, shuffle=True, batch_size=32, use_augment=False, instance_based=False):
+    def __init__(self, path_to_images, labels=None, shuffle=True, batch_size=32, use_augment=False, instance_based=False,predict_aug_size=None):
         'Initialization'
         # Store arguments
         if instance_based:
             self.batch_size = batch_size * 2
         else:
             self.batch_size = batch_size
-        self.labels = labels.copy()
         # Get File names and labels locally
         self.img_list = np.array(create_image_lists(path_to_images))
-        # Initialize Index To 0
-        self.idx = 0
         # Store the length of available images
         self.num_images = len(self.img_list)
+        # Store Labels
+        if labels == None: # return original index instead
+            self.labels = np.arange(self.num_images)
+        else:
+            self.labels = labels
+        # Initialize Index To 0
+        self.idx = 0
         # Shuffle
         self.shuffle = shuffle
         # Current arrangement of samples
@@ -43,9 +47,14 @@ class DataGenerator(Sequence):
                 data_format="channels_last")
         # Instance based generator
         self.instance_based = instance_based
+        # Predic Aug
+        if predict_aug_size == None or predict_aug_size < 1:
+            self.predict_aug_size = 1
+        
+        self.predict_aug_size = predict_aug_size
         # Initialize First Epoch
         self.on_epoch_end()
-   
+    
     def on_epoch_end(self):
         'Updates image list after each epoch'
         if self.shuffle:
@@ -72,12 +81,11 @@ class DataGenerator(Sequence):
         if self.idx > 0 and self.idx < self.batch_size - 1:
             self.idx = 0
             batch = batch[0:self.batch_size-self.idx]
-        # Current labels and samples
+        # Current images in numpy array
         curr_list = self.img_list[self.permutation]
-        curr_labels = self.labels[self.permutation]
-        # Load images in numpy array
         X = np.array([np.array(imread(curr_list[img_idx])) for img_idx in batch])
         # Get the labels
+        curr_labels = self.labels[self.permutation]
         y = curr_labels[batch]
         # Augmentation
         X, y = self.__augment_images__(X,y)
@@ -93,14 +101,24 @@ class DataGenerator(Sequence):
         self.shuffle = shuffle
 
     def __augment_images__(self,X,y):
-        for X_batch, y_batch in self.datagen.flow(X, y, 
+        X_batch = []
+        y_batch = []
+        idx = 0
+        for X_tmp, y_tmp in self.datagen.flow(X, y, 
                                         batch_size=self.batch_size,
                                         shuffle=False):
-            break
+            X_batch.append(X_tmp) 
+            y_batch.append(y_tmp)
+            idx+=1
+            if idx >= self.predict_aug_size:
+                break
+        X_batch=np.vstack(X_batch)
+        y_batch=np.hstack(y_batch)
         if self.instance_based:
             if len(X_batch) % 2 != 0:
                 raise ValueError("Batch size must be even numbered to use instance based")
             perm = np.random.permutation(2)
-            X_batch = np.array([np.concatenate((X_batch[2*idx+perm[0]],X_batch[2*idx+perm[1]]),axis=1) for idx in range(int(self.batch_size / 2))])
+            X_batch = np.array([np.concatenate((X_batch[2*idx+perm[0]],X_batch[2*idx+perm[1]]),axis=1) for idx in range(int(len(X_batch) / 2))])
             y_batch = y_batch[::2]            
+
         return X_batch, y_batch
