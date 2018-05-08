@@ -21,7 +21,7 @@ class DataGenerator(Sequence):
         # Store the length of available images
         self.num_images = len(self.img_list)
         # Store Labels
-        if labels == None: # return original index instead
+        if labels is None: # return original index instead
             self.labels = np.arange(self.num_images)
             # Array to store the returned images ID (idx) when predicting
         else:
