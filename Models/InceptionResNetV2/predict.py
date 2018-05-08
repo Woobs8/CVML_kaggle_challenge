@@ -83,9 +83,9 @@ def instance_predict(test_data, model_path, output_dir, decision, dual_mode):
                 prob[idx+1,index[1]] = prob_test[index]  
     else:
         for idx in np.unique(id_prob):
-            max_vals = np.amax(prob_test[np.where(id_prob==idx)[0]],axis=1)     # find highest class probability for each sample
-            prob[idx] = prob_test[np.argmax(max_vals)]                           #  assign most confident prediction to both images
-            prob[idx+1] = prob_test[np.argmax(max_vals)]   
+            index = np.unravel_index(np.argmax(prob_test[np.where(id_prob==idx)[0]], axis=None), prob_test.shape)   # find highest class probability
+            prob[idx,index[1]] = prob_test[index]                                                      #  assign most confident prediction to both images
+            prob[idx+1,index[1]] = prob_test[index]   
     
     prediction = np.argmax(prob, axis=1) + 1
     
@@ -184,8 +184,8 @@ def aug_instance_predict(test_data, aug_test_data, model_path, output_dir, decis
         elif decision == 'weighted_average':
             max_vals = np.amax(agg_prob[np.where(id_agg_prob==idx)[0]],axis=1)  # find highest class probability for each sample
             weights = max_vals / np.amax(max_vals)                              # weigh the contribution of each sample, by its confidence in its prediction
-            prob[idx] = np.dot(weights,agg_prob)                                # assign weighted sum of all sample predictions to both images
-            prob[idx+1] = np.dot(weights,agg_prob)                              # (as we are only interested in the maximum, division is uncessary)
+            prob[idx] = np.dot(weights,agg_prob[np.where(id_agg_prob==idx)[0]])                                # assign weighted sum of all sample predictions to both images
+            prob[idx+1] = np.dot(weights,agg_prob[np.where(id_agg_prob==idx)[0]])                              # (as we are only interested in the maximum, division is uncessary)
     
     # Calculate the actual predicted label    
     prediction = np.argmax(prob,axis=1) + 1
