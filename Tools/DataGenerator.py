@@ -110,10 +110,7 @@ class DataGenerator(Sequence):
         idx = 0
         for X_tmp, y_tmp in self.datagen.flow(X, y, 
                                         batch_size=self.batch_size,
-                                        shuffle=False,
-                                        save_format = "jpg",
-                                        save_prefix = "TestImg",
-                                        save_to_dir = "/Users/rasmusorndrup/Repositories/TestImages"):
+                                        shuffle=False):
             X_batch.append(X_tmp) 
             y_batch.append(y_tmp)
             idx+=1
