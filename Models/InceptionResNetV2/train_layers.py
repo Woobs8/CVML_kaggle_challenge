@@ -53,7 +53,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             predictions = layers.Dense(num_classes, activation="softmax", name='predictions')(dropout_1)
             
             # create final model
-            final_model = Model(input = inp, output = predictions)
+            final_model = Model(input = model_1.input, output = predictions)
         
         else:
             if use_resize:
