@@ -56,34 +56,8 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             if input_model is not None:
                 # branch 1
                 model_1.load_weights(input_model, by_name=True)      
-                #model_1 = load_model(input_model)
-                #model_1.save_weights("/workspace/workspace/inception_resnet/fine_tune_rasmus_keras_restart/weights.h5")
-                #model_1.name = "model_1"
-                #model_1.layers.pop() # dense
-                #model_1.layers.pop() # dropout
-                #model_1.outputs = [model_1.layers[-1].output]
-                #model_1.output_layers = [model_1.layers[-1]]
-                #model_1.layers[-1].outbound_nodes = []
-                #for layer in model_1.layers:
-                #    layer.name = layer.name+"_1"
-                #model_1.summry()
-                #return
-                #model_1 = model_1(inp_slice_1)
-                #model_1 = Model(input=inp, output=model_1)
-
                 # branch 2
                 model_2.load_weights(input_model, by_name=True)
-                #model_2 = load_model(input_model)
-                #model_2.name = "model_2"
-                #model_2.layers.pop() # dense
-                #model_2.layers.pop() # dropout
-                #model_2.outputs = [model_2.layers[-1].output]
-                #model_2.output_layers = [model_2.layers[-1]]
-                #model_2.layers[-1].outbound_nodes = []
-                #for layer in model_2.layers:
-                #    layer.name = layer.name+"_2"
-                #model_2 = model_2(inp_slice_2)
-                #model_2 = Model(input=inp, output=model_2)
 
             # create first branch            
             model_1.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)

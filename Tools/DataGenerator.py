@@ -41,7 +41,8 @@ class DataGenerator(Sequence):
                 horizontal_flip = True,
                 vertical_flip=True,
                 fill_mode = "nearest",
-                rotation_range=50,
+                rotation_range=45,
+                shear_range=25,
                 #featurewise_center=True,
                 data_format="channels_last")
         else:# Always rescale
@@ -109,7 +110,10 @@ class DataGenerator(Sequence):
         idx = 0
         for X_tmp, y_tmp in self.datagen.flow(X, y, 
                                         batch_size=self.batch_size,
-                                        shuffle=False):
+                                        shuffle=False,
+                                        save_format = "jpg",
+                                        save_prefix = "TestImg",
+                                        save_to_dir = "/Users/rasmusorndrup/Repositories/TestImages"):
             X_batch.append(X_tmp) 
             y_batch.append(y_tmp)
             idx+=1
