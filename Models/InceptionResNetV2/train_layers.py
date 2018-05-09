@@ -39,16 +39,17 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
     if restart_model is None:
         # add resize layer to fit images for InceptionResNetV2 input layer (299x299)
         if instance_based:
+
             model_1 = InceptionResNetV2(pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256*2, 3))
-            #start_weights = model_1.get_weights()
-            # load input model, pop classification layers and split into two branches
+    
+           # load input model, pop classification layers and split into two branches
             if input_model is not None:
                 model_1.load_weights(input_model, by_name=True)      
 
             # create first branch            
             model_1.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
             dropout_1 = layers.Dropout(clf_dropout,name='dropout_1')(model_1.output)
-            
+ 
             # add classifier
             predictions = layers.Dense(num_classes, activation="softmax", name='predictions')(dropout_1)
             
@@ -132,7 +133,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
                 
                 
         # compile the model 
-        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.adamax(lr=lr), metrics=["accuracy"])
+        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SDG(lrlr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
 
     # print model summary and stop if specified
     final_model.summary()
