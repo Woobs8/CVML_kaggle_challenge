@@ -133,7 +133,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
                 
                 
         # compile the model 
-        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SDG(lrlr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
+        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lrlr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
 
     # print model summary and stop if specified
     final_model.summary()
