@@ -147,7 +147,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
                         validation_data = val_generator,
                         validation_steps = val_steps,
                         callbacks = callback_list,
-                        workers=1,
+                        workers=3,
                         use_multiprocessing=True)
 
     # print summary
