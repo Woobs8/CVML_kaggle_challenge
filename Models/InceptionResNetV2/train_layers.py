@@ -149,7 +149,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
                         callbacks = callback_list,
                         workers=3,
                         use_multiprocessing=True)
-
+    final_model.save(output_dir+"/final.h5")
     # print summary
     with open(output_dir + '/' + 'summary.txt','w') as fp:
         fp.write('Max epochs: '+ str(max_epochs)+'\n')
