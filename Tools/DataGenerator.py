@@ -1,3 +1,4 @@
+
 import numpy as np
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
@@ -12,6 +13,7 @@ class DataGenerator(Sequence):
     def __init__(self, path_to_images, labels=None, shuffle=True, batch_size=32, use_augment=False, instance_based=False,predict_aug_size=1):
         'Initialization'
         # Store arguments
+        self.ID = id(self)
         if instance_based:
             self.batch_size = batch_size * 2
         else:
@@ -26,9 +28,6 @@ class DataGenerator(Sequence):
             # Array to store the returned images ID (idx) when predicting
         else:
             self.labels = labels
-        
-        # Initialize Index To 0
-        self.idx = 0
         # Shuffle
         self.shuffle = shuffle
         # Current arrangement of samples
@@ -76,14 +75,13 @@ class DataGenerator(Sequence):
         return int(np.ceil(self.num_images / self.batch_size))
 
 
-    def __data_generation(self):
+    def __data_generation(self,index):
         'Generates data containing batch_size samples'
         # Get batch of indexes
-        batch = np.array([ x % self.num_images for x in range(self.idx, self.idx + self.batch_size) ])
+        idx = index * self.batch_size
+        batch = np.array([ x % self.num_images for x in range(idx, idx + self.batch_size) ])
         # Update Index
-        self.idx = (self.idx + self.batch_size) % self.num_images
-        if self.idx > 0 and self.idx < self.batch_size - 1:
-            self.idx = 0
+        if idx > 0 and idx < self.batch_size - 1:
             batch = batch[0:self.batch_size-self.idx]
         # Current images in numpy array
         curr_list = self.img_list[self.permutation]
@@ -98,7 +96,7 @@ class DataGenerator(Sequence):
     def __getitem__(self, index):
         'Generate one batch of data'
         # Generate data
-        X, y = self.__data_generation()
+        X, y = self.__data_generation(index)
         return X, y
     
     def set_shuffle(self,shuffle):
