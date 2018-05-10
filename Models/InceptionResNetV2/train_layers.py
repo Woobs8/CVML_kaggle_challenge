@@ -39,15 +39,16 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
     if restart_model is None:
         # add resize layer to fit images for InceptionResNetV2 input layer (299x299)
         if instance_based:
+            input_conv = layers.Conv2D(3, 3,input_shape=(256, 256, 6) strides=(1, 1), padding='valid', data_format=None, dilation_rate=(1, 1), activation=layers.LeakyReLU(alpha=0.3), use_bias=True, kernel_initializer='glorot_uniform', bias_initializer='zeros', kernel_regularizer=None, bias_regularizer=None, activity_regularizer=regularizers.l1(0.01), kernel_constraint=None, bias_constraint=None,name="Input_conv")
 
-            model_1 = InceptionResNetV2(pooling='avg',weights =  None, include_top=False, input_shape = (256, 256, 6))
+            model_1 = InceptionResNetV2(input_tensor=input_conv, pooling='avg',weights =  "imagenet", include_top=False, input_shape = (256, 256, 3))
     
            # load input model, pop classification layers and split into two branches
             if input_model is not None:
                 model_1.load_weights(input_model, by_name=True)      
 
             # create first branch            
-            model_1.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
+            model_1.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.005)
             dropout_1 = layers.Dropout(clf_dropout,name='dropout_1')(model_1.output)
  
             # add classifier
