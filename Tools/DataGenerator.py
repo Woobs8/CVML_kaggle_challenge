@@ -13,7 +13,6 @@ class DataGenerator(Sequence):
     def __init__(self, path_to_images, labels=None, shuffle=True, batch_size=32, use_augment=False, instance_based=False,predict_aug_size=1):
         'Initialization'
         # Store arguments
-        self.ID = id(self)
         if instance_based:
             self.batch_size = batch_size * 2
         else:
@@ -81,8 +80,8 @@ class DataGenerator(Sequence):
         idx = index * self.batch_size
         batch = np.array([ x % self.num_images for x in range(idx, idx + self.batch_size) ])
         # Update Index
-        if idx > 0 and idx < self.batch_size - 1:
-            batch = batch[0:self.batch_size-self.idx]
+        if idx + self.batch_size > self.num_images:
+            batch = batch[0:idx-self.num_images]
         # Current images in numpy array
         curr_list = self.img_list[self.permutation]
         X = np.array([np.array(imread(curr_list[img_idx])) for img_idx in batch])
@@ -120,7 +119,7 @@ class DataGenerator(Sequence):
             if len(X_batch) % 2 != 0:
                 raise ValueError("Batch size must be even numbered to use instance based")
             perm = np.random.permutation(2)
-            X_batch = np.array([np.concatenate((X_batch[2*idx+perm[0]],X_batch[2*idx+perm[1]]),axis=1) for idx in range(int(len(X_batch) / 2))])
+            X_batch = np.array([np.concatenate((X_batch[2*idx+perm[0]],X_batch[2*idx+perm[1]]),axis=-1) for idx in range(int(len(X_batch) / 2))])
             y_batch = y_batch[::2]
 
         return X_batch, y_batch

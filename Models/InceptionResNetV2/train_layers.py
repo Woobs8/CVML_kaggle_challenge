@@ -40,7 +40,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
         # add resize layer to fit images for InceptionResNetV2 input layer (299x299)
         if instance_based:
 
-            model_1 = InceptionResNetV2(pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256*2, 3))
+            model_1 = InceptionResNetV2(pooling='avg',weights =  None, include_top=False, input_shape = (256, 256, 6))
     
            # load input model, pop classification layers and split into two branches
             if input_model is not None:
