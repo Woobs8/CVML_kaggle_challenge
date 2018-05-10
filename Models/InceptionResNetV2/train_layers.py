@@ -126,7 +126,8 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
     if not restart:
         # set trainable layers
         if train_mode == "predictions":
-            final_model.get_layer("predictions").trainable=True
+            final_model.get_layer("predictions").trainable=True 
+            final_model.get_layer("Input_conv").trainable=True 
         else:
             for layer in final_model.layers:
                 layer.trainable = True
