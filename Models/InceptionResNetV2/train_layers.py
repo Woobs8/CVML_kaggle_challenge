@@ -131,13 +131,12 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
         # set trainable layers
         if train_mode == "predictions":
             final_model.get_layer("predictions").trainable=True 
-        elif train_mode == "inp_preds:
+        elif train_mode == "inp_preds":
             final_model.get_layer("predictions").trainable=True 
             final_model.get_layer("Input_conv").trainable=True
-        elif train_mode == "inp_conv"
+        elif train_mode == "inp_conv":
             final_model.get_layer("Input_conv").trainable=True 
         else:
-            
             for layer in final_model.layers:
                 if layer.name == "inception_resnet_v2":
                     for layer in final_model.layers:
