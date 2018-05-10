@@ -48,8 +48,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
                 model_1.load_weights(input_model, by_name=True)
             
             model_1 = model_1(inp_model.output)      
-
-            model_1 = Model(inp_model.input,model_1)
+            model_1 = Model(inp_model.input, model_1)
 
             # create first branch            
             model_1.get_layer("inception_resnet_v2").get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.005)
@@ -60,6 +59,10 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             
             # create final model
             final_model = Model(input = model_1.input, output = predictions)
+            if input_model is not None:
+                print("here")
+                final_model.get_layer("inception_resnet_v2").load_weights(input_model, by_name=True)
+                final_model.load_weights(input_model, by_name=True)
         
         else:
             if use_resize:
