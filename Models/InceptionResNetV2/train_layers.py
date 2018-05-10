@@ -40,13 +40,12 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
         # add resize layer to fit images for InceptionResNetV2 input layer (299x299)
         if instance_based:
             inp = Input(shape=(256, 256, 6))
-            input_conv = layers.Conv2D(3, 3, strides=(1, 1), padding='valid', data_format=None, dilation_rate=(1, 1), activation='relu', use_bias=True, kernel_initializer='glorot_uniform', bias_initializer='zeros', kernel_regularizer=None, bias_regularizer=None, activity_regularizer=regularizers.l1(0.01), kernel_constraint=None, bias_constraint=None,name="Input_conv")(inp)
-            inp_model = Model(inp,input_conv)
+            inp_resize = Lambda(lambda image: (image[:,:,:3]+image[:,:,3:])/2,name='image_resize')(inp)
+            inp_model = Model(inp,inp_resize)
             model_1 = InceptionResNetV2(input_tensor=inp_model.output,pooling='avg',weights =  None, include_top=False)#, input_shape = (256, 256, 3))
 
             #model_1.input = inp_model.output     
             # model_1 = Model(inp_model.input, model_1.output)
-            model_1.summary()
             # create first branch            
             model_1.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.005)
             dropout_1 = layers.Dropout(clf_dropout,name='dropout_1')(model_1.output)
@@ -207,7 +206,7 @@ if __name__ == "__main__":
                         required=True)
 
     # only allow model to train whole inception "blocks"
-    allowed_layers = ['inp_conv','predictions','inp_preds','full']
+    allowed_layers = ['predictions''full']
     parser.add_argument('-train_mode', 
                         help='Layer to stop training from (layer is included in training). Limited to beginning of inception blocks',
                         required=True,
