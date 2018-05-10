@@ -42,14 +42,13 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             inp = Input(shape=(256, 256, 6))
             input_conv = layers.Conv2D(3, 3, strides=(1, 1), padding='valid', data_format=None, dilation_rate=(1, 1), activation='relu', use_bias=True, kernel_initializer='glorot_uniform', bias_initializer='zeros', kernel_regularizer=None, bias_regularizer=None, activity_regularizer=regularizers.l1(0.01), kernel_constraint=None, bias_constraint=None,name="Input_conv")(inp)
             inp_model = Model(inp,input_conv)
-            model_1 = InceptionResNetV2(pooling='avg',weights =  "imagenet", include_top=False)#, input_shape = (256, 256, 3))
+            model_1 = InceptionResNetV2(input_tensor=inp_model.output,pooling='avg',weights =  None, include_top=False)#, input_shape = (256, 256, 3))
 
-
-            model_1 = model_1(inp_model.output)      
-            model_1 = Model(inp_model.input, model_1)
-
+            #model_1.input = inp_model.output     
+            # model_1 = Model(inp_model.input, model_1.output)
+            model_1.summary()
             # create first branch            
-            model_1.get_layer("inception_resnet_v2").get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.005)
+            model_1.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.005)
             dropout_1 = layers.Dropout(clf_dropout,name='dropout_1')(model_1.output)
 
             # add classifier
@@ -58,7 +57,6 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             # create final model
             final_model = Model(input = model_1.input, output = predictions)
             if input_model is not None:
-                final_model.get_layer("inception_resnet_v2").load_weights(input_model, by_name=True)
                 final_model.load_weights(input_model, by_name=True)
         
         else:
