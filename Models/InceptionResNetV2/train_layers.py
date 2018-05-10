@@ -40,7 +40,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
         # add resize layer to fit images for InceptionResNetV2 input layer (299x299)
         if instance_based:
             inp = Input(shape=(256, 256, 6))
-            inp_resize = Lambda(lambda image: (image[:,:,:3]+image[:,:,3:])/2,name='image_resize')(inp)
+            inp_resize = Lambda(lambda image: (image[:,:,:,:3]+image[:,:,3:])/2,name='image_resize')(inp)
             inp_model = Model(inp,inp_resize)
             model_1 = InceptionResNetV2(input_tensor=inp_model.output,pooling='avg',weights =  None, include_top=False)#, input_shape = (256, 256, 3))
 
