@@ -39,10 +39,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
     if restart_model is None:
         # add resize layer to fit images for InceptionResNetV2 input layer (299x299)
         if instance_based:
-            inp = Input(shape=(256, 256, 6))
-            inp_resize = Lambda(lambda image: (image[:,:,:,:3]+image[:,:,:,3:])/2,name='image_resize')(inp)
-            inp_model = Model(inp,inp_resize)
-            model_1 = InceptionResNetV2(input_tensor=inp_model.output,pooling='avg',weights =  None, include_top=False)#, input_shape = (256, 256, 3))
+            model_1 = InceptionResNetV2(pooling='avg',weights =  "imagenet", include_top=False)#, input_shape = (256, 256*2, 3))
 
             #model_1.input = inp_model.output     
             # model_1 = Model(inp_model.input, model_1.output)
@@ -55,6 +52,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             
             # create final model
             final_model = Model(input = model_1.input, output = predictions)
+            
             if input_model is not None:
                 final_model.load_weights(input_model, by_name=True)
         
@@ -72,7 +70,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             
             # create classifier - InceptionResNetV2 only uses an average pooling layer and a softmax classifier on top
             # Some articles mention that a dropout layer of 0.2 is used between the pooling layer and the softmax layer
-            base_model.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
+            #base_model.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
             clf = layers.Dropout(clf_dropout, name="dropout1")(base_model.output)
             predictions = layers.Dense(num_classes, activation="softmax" ,name="predictions")(clf)
 
