@@ -39,7 +39,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
     if restart_model is None:
         # add resize layer to fit images for InceptionResNetV2 input layer (299x299)
         if instance_based:
-            model_1 = InceptionResNetV2(pooling='avg',weights =  "imagenet", include_top=False)#, input_shape = (256, 256*2, 3))
+            model_1 = InceptionResNetV2(pooling='avg', input_shape=(256,256*2,3), weights =  "imagenet", include_top=False)#, input_shape = (256, 256*2, 3))
 
             #model_1.input = inp_model.output     
             # model_1 = Model(inp_model.input, model_1.output)
@@ -52,7 +52,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             
             # create final model
             final_model = Model(input = model_1.input, output = predictions)
-            
+
             if input_model is not None:
                 final_model.load_weights(input_model, by_name=True)
         

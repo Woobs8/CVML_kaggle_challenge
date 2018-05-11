@@ -119,7 +119,7 @@ class DataGenerator(Sequence):
             if len(X_batch) % 2 != 0:
                 raise ValueError("Batch size must be even numbered to use instance based")
             perm = np.random.permutation(2)
-            X_batch = np.array([np.concatenate((X_batch[2*idx+perm[0]],X_batch[2*idx+perm[1]]),axis=2) for idx in range(int(len(X_batch) / 2))])
+            X_batch = np.array([np.concatenate((X_batch[2*idx+perm[0]],X_batch[2*idx+perm[1]]),axis=1) for idx in range(int(len(X_batch) / 2))])
             y_batch = y_batch[::2]
 
         return X_batch, y_batch
