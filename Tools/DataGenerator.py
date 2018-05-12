@@ -148,6 +148,8 @@ class DataGenerator(Sequence):
                 tmp_sum += preprocess_input(x)
             
             means.append(tmp_sum / len(img_list))
-        mean = np.sum(np.vstack(means),axis=0)
+
+        mean = np.vstack(means)   
+        mean = np.mean(mean)
         return mean
 
