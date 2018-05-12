@@ -19,7 +19,7 @@ from keras.layers import Lambda, Input, GlobalMaxPooling2D
 from keras.callbacks import History 
 K.set_image_data_format('channels_last')
 
-def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_path, max_epochs, lr, batch_size, train_mode, lr_plateau =[5,0.01,1,0.000001], early_stop=[3,0.01], clf_dropout=0.2, restart_model=None, input_model=None, print_model_summary_only=False, use_resize=False, restart=False, histogram_graphs=False, instance_based=False):
+def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_path, max_epochs, lr, batch_size, train_mode, lr_plateau =[5,0.01,1,0.000001], early_stop=[3,0.01], clf_dropout=0.2, restart_model=None, input_model=None, print_model_summary_only=False, use_resize=False, restart=False, histogram_graphs=False, instance_based=False, mean_pre_data):
     # load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
@@ -91,7 +91,8 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
     train_generator = DataGenerator(path_to_images=train_data,
                                     labels=cat_train_labels, 
                                     batch_size=batch_size,
-                                    instance_based=instance_based)
+                                    instance_based=instance_based,
+                                    mean_sets=mean_pre_data)
     
     if histogram_graphs and not instance_based:
 
@@ -106,7 +107,8 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
         val_generator = DataGenerator(  path_to_images=val_data,
                                         labels=cat_val_labels, 
                                         batch_size=batch_size,
-                                        instance_based=instance_based)
+                                        instance_based=instance_based,
+                                        mean_sets=mean_pre_data)
     
     # define model keras callbacks 
     checkpoint = ModelCheckpoint(filepath=output_dir+"/checkpoint.h5", monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', period=1)
@@ -277,6 +279,13 @@ if __name__ == "__main__":
                         type=str2bool,
                         default=False)
 
+    parser.add_argument('-mean_pre_data', 
+                        help='Paths to all data sets that should be included in preprocessing',
+                        nargs='*',
+                        type=str,
+                        required=False
+                        default=False)
+
     args = parser.parse_args()
     
     train_classifier(   train_data=args.train_data, 
@@ -298,4 +307,5 @@ if __name__ == "__main__":
                         early_stop=args.early_stop,
                         tb_path=args.tb_path,
                         histogram_graphs=args.histogram_graphs,
-                        instance_based=args.inst_based)
+                        instance_based=args.inst_based,
+                        mean_pre_data=args.mean_pre_data)
