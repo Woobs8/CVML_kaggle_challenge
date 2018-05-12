@@ -5,11 +5,12 @@ from scipy.misc import imread
 from Tools.ImageReader import create_image_lists
 from keras.utils import Sequence
 from keras.preprocessing.image import ImageDataGenerator
+from keras.applications.inception_resnet_v2 import preprocess_input
 
 
 class DataGenerator(Sequence):
     'Generates data for Keras'
-    def __init__(self, path_to_images, labels=None, shuffle=True, batch_size=32, use_augment=False, instance_based=False,predict_aug_size=1):
+    def __init__(self, path_to_images, labels=None, shuffle=True, batch_size=32, use_augment=False, instance_based=False, predict_aug_size=1, mean_sets=None):
         'Initialization'
         # Store arguments
         self.ID = id(self)
@@ -32,10 +33,16 @@ class DataGenerator(Sequence):
         # Current arrangement of samples
         self.permutation = np.arange(self.num_images)
         
+        # Mean
+        if mean_sets is None:
+            self.mean = 0   
+        else:
+            self.mean = self.calc_mean(mean_sets)
+
         # Data Generator
         if use_augment:
             self.datagen = ImageDataGenerator(  
-                rescale = 1./255,
+                rescale = None,
                 horizontal_flip = True,
                 vertical_flip=True,
                 fill_mode = "nearest",
@@ -45,7 +52,7 @@ class DataGenerator(Sequence):
                 data_format="channels_last")
         else:# Always rescale
             self.datagen = ImageDataGenerator(  
-                rescale = 1./255,
+                rescale = None,
                 data_format="channels_last")
         
         # Instance based generator
@@ -85,6 +92,10 @@ class DataGenerator(Sequence):
         # Current images in numpy array
         curr_list = self.img_list[self.permutation]
         X = np.array([np.array(imread(curr_list[img_idx])) for img_idx in batch])
+        X = X.astype('float32')
+        print(self.mean)
+        print(self.mean.shape)
+        X = preprocess_input(X) - self.mean
         # Get the labels
         curr_labels = self.labels[self.permutation]
         y = curr_labels[batch]
@@ -123,3 +134,22 @@ class DataGenerator(Sequence):
             y_batch = y_batch[::2]
 
         return X_batch, y_batch
+
+
+    def calc_mean(self,data_sets):
+        means = []
+        for data_set in data_sets:
+            # Get File names and labels locally
+            img_list = np.array(create_image_lists(data_set))
+            x = np.array(imread(img_list[0]))
+            x = x.astype('float32')
+            tmp_sum = preprocess_input(x)
+            for img_path in img_list[1:]:
+                x = np.array(imread(img_path))
+                x = x.astype('float32')
+                tmp_sum += preprocess_input(x)
+            
+            means.append(tmp_sum / len(img_list))
+        mean = np.sum(np.vstack(means),axis=0)
+        return mean
+
