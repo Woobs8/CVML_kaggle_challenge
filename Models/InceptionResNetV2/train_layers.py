@@ -17,13 +17,15 @@ from Tools.tensorboard_lr import LRTensorBoard
 from keras import backend as K
 from keras.layers import Lambda, Input, GlobalMaxPooling2D
 from keras.callbacks import History 
+from sklearn.utils.class_weight import compute_class_weight
 K.set_image_data_format('channels_last')
 
 def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_path, max_epochs, lr, batch_size, train_mode, lr_plateau =[5,0.01,1,0.000001], early_stop=[3,0.01], clf_dropout=0.2, restart_model=None, input_model=None, print_model_summary_only=False, use_resize=False, restart=False, histogram_graphs=False, instance_based=False, mean_pre_data=None):
     # load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
-    
+    class_weights = compute_class_weight('balanced',np.unique(training_labels),training_labels)
+
     # labels must be from 0-num_classes-1, so label offset is subtracted
     unique, count = np.unique(training_labels,return_counts=True) 
     num_classes = len(unique)
@@ -138,7 +140,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
                 
                 
         # compile the model 
-        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
+        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.Adam(lr=lr), metrics=["accuracy"])
 
     # print model summary and stop if specified
     final_model.summary()
@@ -153,7 +155,8 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
                         validation_steps = val_steps,
                         callbacks = callback_list,
                         workers=3,
-                        use_multiprocessing=True)
+                        use_multiprocessing=True,
+                        class_weight = class_weights)
     final_model.save(output_dir+"/final.h5")
     # print summary
     with open(output_dir + '/' + 'summary.txt','w') as fp:
