@@ -283,7 +283,7 @@ if __name__ == "__main__":
                         help='Paths to all data sets that should be included in preprocessing',
                         nargs='*',
                         type=str,
-                        required=False
+                        required=False,
                         default=False)
 
     args = parser.parse_args()
