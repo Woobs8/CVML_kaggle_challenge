@@ -93,8 +93,6 @@ class DataGenerator(Sequence):
         curr_list = self.img_list[self.permutation]
         X = np.array([np.array(imread(curr_list[img_idx])) for img_idx in batch])
         X = X.astype('float32')
-        print(self.mean)
-        print(self.mean.shape)
         X = preprocess_input(X) - self.mean
         # Get the labels
         curr_labels = self.labels[self.permutation]
