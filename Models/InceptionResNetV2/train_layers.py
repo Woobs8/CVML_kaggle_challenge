@@ -19,7 +19,7 @@ from keras.layers import Lambda, Input, GlobalMaxPooling2D
 from keras.callbacks import History 
 K.set_image_data_format('channels_last')
 
-def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_path, max_epochs, lr, batch_size, train_mode, lr_plateau =[5,0.01,1,0.000001], early_stop=[3,0.01], clf_dropout=0.2, restart_model=None, input_model=None, print_model_summary_only=False, use_resize=False, restart=False, histogram_graphs=False, instance_based=False, mean_pre_data):
+def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_path, max_epochs, lr, batch_size, train_mode, lr_plateau =[5,0.01,1,0.000001], early_stop=[3,0.01], clf_dropout=0.2, restart_model=None, input_model=None, print_model_summary_only=False, use_resize=False, restart=False, histogram_graphs=False, instance_based=False, mean_pre_data=None):
     # load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
