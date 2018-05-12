@@ -39,73 +39,18 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
     if restart_model is None:
         # add resize layer to fit images for InceptionResNetV2 input layer (299x299)
         if instance_based:
-
-            # create input tensor
-            inp = Input(shape=(256, 512, 3),name='image_input')
-
-            # slice input tensor to split the two images
-            inp_slice_1 = Lambda(lambda image: image[:,:,:256,:],name='image_slice_1', output_shape=(256,256,3))(inp)
-            inp_slice_2 = Lambda(lambda image: image[:,:,256:,:],name='image_slice_2', output_shape=(256,256,3))(inp)
-
-            # create two branches from pretrained imagenet weights
-
-            model_1 = InceptionResNetV2(input_tensor=inp_slice_1,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
-            start_weights = model_1.get_weights()
-            model_2 = InceptionResNetV2(input_tensor=inp_slice_2,pooling='avg',weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
-            # load input model, pop classification layers and split into two branches
-            if input_model is not None:
-                # branch 1
-                model_1.load_weights(input_model, by_name=True)      
-                #model_1 = load_model(input_model)
-                #model_1.save_weights("/workspace/workspace/inception_resnet/fine_tune_rasmus_keras_restart/weights.h5")
-                #model_1.name = "model_1"
-                #model_1.layers.pop() # dense
-                #model_1.layers.pop() # dropout
-                #model_1.outputs = [model_1.layers[-1].output]
-                #model_1.output_layers = [model_1.layers[-1]]
-                #model_1.layers[-1].outbound_nodes = []
-                #for layer in model_1.layers:
-                #    layer.name = layer.name+"_1"
-                #model_1.summry()
-                #return
-                #model_1 = model_1(inp_slice_1)
-                #model_1 = Model(input=inp, output=model_1)
-
-                # branch 2
-                model_2.load_weights(input_model, by_name=True)
-                #model_2 = load_model(input_model)
-                #model_2.name = "model_2"
-                #model_2.layers.pop() # dense
-                #model_2.layers.pop() # dropout
-                #model_2.outputs = [model_2.layers[-1].output]
-                #model_2.output_layers = [model_2.layers[-1]]
-                #model_2.layers[-1].outbound_nodes = []
-                #for layer in model_2.layers:
-                #    layer.name = layer.name+"_2"
-                #model_2 = model_2(inp_slice_2)
-                #model_2 = Model(input=inp, output=model_2)
-
-            # create first branch            
-            model_1.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
+            model_1 = InceptionResNetV2(pooling='avg', input_shape=(256,256*2,3), weights =  "imagenet", include_top=False)     
+            model_1.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.005)
             dropout_1 = layers.Dropout(clf_dropout,name='dropout_1')(model_1.output)
-            for layer in model_1.layers:
-                layer.name = layer.name+"_1"
 
-            # create second branch
-
-            model_2.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
-            dropout_2 = layers.Dropout(clf_dropout,name='dropout_2')(model_2.output)
-            for layer in model_2.layers:
-                layer.name = layer.name+"_2"
-           
-            # merge branches before classification layer
-            merged_branches = layers.concatenate([dropout_1, dropout_2], axis=-1)
-            
             # add classifier
-            predictions = layers.Dense(num_classes, activation="softmax", name='predictions')(merged_branches)
+            predictions = layers.Dense(num_classes, activation="softmax", name='predictions')(dropout_1)
             
             # create final model
-            final_model = Model(input = inp, output = predictions)
+            final_model = Model(input = model_1.input, output = predictions)
+
+            if input_model is not None:
+                final_model.load_weights(input_model, by_name=True)
         
         else:
             if use_resize:
@@ -121,7 +66,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             
             # create classifier - InceptionResNetV2 only uses an average pooling layer and a softmax classifier on top
             # Some articles mention that a dropout layer of 0.2 is used between the pooling layer and the softmax layer
-            base_model.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
+            #base_model.get_layer("conv_7b").kernel_regularizer = regularizers.l1(0.01)
             clf = layers.Dropout(clf_dropout, name="dropout1")(base_model.output)
             predictions = layers.Dense(num_classes, activation="softmax" ,name="predictions")(clf)
 
@@ -175,16 +120,23 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
     
     if not restart:
         # set trainable layers
+        flag = False
         if train_mode == "predictions":
-            final_model.get_layer("predictions").trainable=True
+            final_model.get_layer("predictions").trainable=True 
+        elif train_mode == "mixed_7a":
+            for layer in final_model.layers:
+                if layer.name == "mixed_7a":
+                    flag = True
+                if flag:
+                    layer.trainable = True
         else:
             for layer in final_model.layers:
-                layer.trainable = True
+                    layer.trainable = True
                 
                 
                 
         # compile the model 
-        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.adamax(lr=lr), metrics=["accuracy"])
+        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
 
     # print model summary and stop if specified
     final_model.summary()
@@ -198,9 +150,9 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
                         validation_data = val_generator,
                         validation_steps = val_steps,
                         callbacks = callback_list,
-                        workers=1,
+                        workers=3,
                         use_multiprocessing=True)
-
+    final_model.save(output_dir+"/final.h5")
     # print summary
     with open(output_dir + '/' + 'summary.txt','w') as fp:
         fp.write('Max epochs: '+ str(max_epochs)+'\n')
@@ -246,7 +198,7 @@ if __name__ == "__main__":
                         required=True)
 
     # only allow model to train whole inception "blocks"
-    allowed_layers = ['predictions','full']
+    allowed_layers = ['predictions','full','mixed_7a']
     parser.add_argument('-train_mode', 
                         help='Layer to stop training from (layer is included in training). Limited to beginning of inception blocks',
                         required=True,
