@@ -252,11 +252,11 @@ if __name__ == "__main__":
                         choices=['average','highest','weighted_average'],
                         default=['average'])
     parser.add_argument('-mean_pre_data', 
-                    help='Paths to all data sets that should be included in preprocessing',
-                    nargs='*',
-                    type=str,
-                    required=False,
-                    default=False)
+                        help='Paths to all data sets that should be included in preprocessing',
+                        nargs='*',
+                        type=str,
+                        required=False,
+                        default=False)
     
     args = parser.parse_args()
     if args.instance:
