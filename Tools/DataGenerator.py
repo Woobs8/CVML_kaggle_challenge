@@ -87,8 +87,8 @@ class DataGenerator(Sequence):
         idx = index * self.batch_size
         batch = np.array([ x % self.num_images for x in range(idx, idx + self.batch_size) ])
         # Update Index
-        if idx > 0 and idx < self.batch_size - 1:
-            batch = batch[0:self.batch_size-self.idx]
+        if (idx+self.batch_size) % self.num_images < self.batch_size - 1:
+            batch = batch[0:self.num_images-idx]
         # Current images in numpy array
         curr_list = self.img_list[self.permutation]
         X = np.array([np.array(imread(curr_list[img_idx])) for img_idx in batch])
@@ -148,6 +148,8 @@ class DataGenerator(Sequence):
                 tmp_sum += preprocess_input(x)
             
             means.append(tmp_sum / len(img_list))
-        mean = np.sum(np.vstack(means),axis=0)
+
+        mean = np.vstack(means)   
+        mean = np.mean(mean)
         return mean
 
