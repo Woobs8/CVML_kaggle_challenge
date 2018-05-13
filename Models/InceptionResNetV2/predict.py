@@ -14,7 +14,7 @@ import re
 import tensorflow as tf
 
 
-def predict(test_data, model_path, output_dir):
+def predict(test_data, model_path, output_dir,mean_pre_data):
     print("Running image-based predictions")     
     # Load data
     #X = image_reader(test_data) * (1./255)
@@ -26,7 +26,8 @@ def predict(test_data, model_path, output_dir):
     pred_gen = DataGenerator(   path_to_images=test_data,
                                 batch_size=batch_size,
                                 shuffle=False,
-                                use_augment=False)
+                                use_augment=False,
+                                mean_sets=mean_pre_data)
     prob = []
     num_steps = pred_gen.__len__()
     for idx in range(num_steps):
@@ -41,7 +42,7 @@ def predict(test_data, model_path, output_dir):
     write_predictions_file(prediction,output_dir)
 
 
-def instance_predict(test_data, model_path, output_dir, decision, dual_mode):
+def instance_predict(test_data, model_path, output_dir, decision, dual_mode,mean_pre_data):
     print("Running non-augmented instance-based predictions")
     # load pre-trained model
     final_model = load_model(model_path)
@@ -53,7 +54,8 @@ def instance_predict(test_data, model_path, output_dir, decision, dual_mode):
                                 batch_size=batch_size,
                                 shuffle=False,
                                 use_augment=False,
-                                instance_based=dual_mode)
+                                instance_based=dual_mode,
+                                mean_sets=mean_pre_data)
 
     # predict
     prob_test = []
@@ -103,7 +105,7 @@ def instance_predict(test_data, model_path, output_dir, decision, dual_mode):
     write_predictions_file(prediction,output_dir)
 
 
-def aug_instance_predict(test_data, aug_test_data, model_path, output_dir, decision, dual_mode, num_aug):
+def aug_instance_predict(test_data, aug_test_data, model_path, output_dir, decision, dual_mode, num_aug,mean_pre_data):
     print("Running augmented instance-based predictions")
 
     # load pre-trained model
@@ -116,7 +118,8 @@ def aug_instance_predict(test_data, aug_test_data, model_path, output_dir, decis
                                     batch_size=batch_size_org,
                                     shuffle=False,
                                     use_augment=False,
-                                    instance_based=dual_mode)
+                                    instance_based=dual_mode,
+                                    mean_sets=mean_pre_data)
 
     # Data Generator augmented images
     batch_size_aug = 8
@@ -125,7 +128,8 @@ def aug_instance_predict(test_data, aug_test_data, model_path, output_dir, decis
                                     shuffle=False,
                                     use_augment=True,
                                     instance_based=dual_mode,
-                                    predict_aug_size=num_aug)
+                                    predict_aug_size=num_aug,
+                                    mean_sets=mean_pre_data)
     # predict original images
     prob_test = []
     id_org = []
@@ -247,6 +251,12 @@ if __name__ == "__main__":
                         nargs=1,
                         choices=['average','highest','weighted_average'],
                         default=['average'])
+    parser.add_argument('-mean_pre_data', 
+                    help='Paths to all data sets that should be included in preprocessing',
+                    nargs='*',
+                    type=str,
+                    required=False,
+                    default=False)
     
     args = parser.parse_args()
     if args.instance:
@@ -257,14 +267,17 @@ if __name__ == "__main__":
                             output_dir=args.output,
                             decision=args.decision_mode[0],
                             dual_mode=args.dual_mode,
-                            num_aug=args.num_aug)
+                            num_aug=args.num_aug,
+                            mean_pre_data=args.mean_pre_data)
         else:
             instance_predict(test_data=args.test_data,
                             model_path=args.input_model,
                             output_dir=args.output,
                             decision=args.decision_mode[0],
-                            dual_mode=args.dual_mode)
+                            dual_mode=args.dual_mode,
+                            mean_pre_data=args.mean_pre_data)
     else:
         predict(test_data=args.test_data, 
                 model_path=args.input_model,
-                output_dir=args.output)
+                output_dir=args.output,
+                mean_pre_data=args.mean_pre_data)
