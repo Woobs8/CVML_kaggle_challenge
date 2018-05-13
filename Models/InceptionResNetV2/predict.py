@@ -17,12 +17,22 @@ import tensorflow as tf
 def predict(test_data, model_path, output_dir):
     print("Running image-based predictions")     
     # Load data
-    X = image_reader(test_data) * (1./255)
+    #X = image_reader(test_data) * (1./255)
     # load pre-trained model
     final_model = load_model(model_path)
     final_model.summary()
     
-    prob = final_model.predict(X,verbose=1)
+    batch_size = 32
+    pred_gen = DataGenerator(   path_to_images=test_data,
+                                batch_size=batch_size,
+                                shuffle=False,
+                                use_augment=False)
+    prob = []
+    num_steps = pred_gen.__len__()
+    for idx in range(num_steps):
+        X_batch, id_batch = pred_gen.__getitem__(idx)
+        prob.append(np.exp(final_model.predict_on_batch(X_batch)))
+    prob = np.vstack(prob)
 
     # prediction = highest probability (+offset since labels may not start at 0)
     prediction = np.argmax(prob, axis=1) + 1
