@@ -16,14 +16,16 @@ from keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, ReduceL
 from Tools.tensorboard_lr import LRTensorBoard
 from keras import backend as K
 from keras.layers import Lambda, Input
-from keras.callbacks import History 
+from keras.callbacks import History
+from sklearn.utils.class_weight import compute_class_weight
 K.set_image_data_format('channels_last')
 
 def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_path, max_epochs, lr, batch_size, start_layer, stop_layer, lr_plateau =[5,0.01,1,0.000001], early_stop=[3,0.01], clf_dropout=0.5, input_model=None, print_model_summary_only=False, use_resize=False, restart=False,histogram_graphs=False):
     # load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
-    
+    class_weights = compute_class_weight('balanced',np.unique(training_labels),training_labels)
+
     # labels must be from 0-num_classes-1, so label offset is subtracted
     unique, count = np.unique(training_labels,return_counts=True) 
     num_classes = len(unique)
@@ -72,7 +74,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
         # use original image sizes - redefine model classification layers
         else:
             # get The VGG19 Model
-            model = VGG19(weights = "imagenet", include_top=False, input_shape = (256, 256, 3))
+            model = VGG19(weights = None, include_top=False, input_shape = (256, 256, 3))
             # create The Classifier     
             clf = layers.Flatten()(model.output)
             clf = layers.Dense(4096, activation="relu",name="fc1")(clf)
@@ -95,7 +97,8 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
     # Data generators
     train_generator = DataGenerator(path_to_images=train_data,
                                     labels=cat_train_labels, 
-                                    batch_size=batch_size)
+                                    batch_size=batch_size,
+                                    use_augment=True)
         
     if histogram_graphs: 
         # If we want histogram graphs we must pass all val images as numpy array
@@ -129,7 +132,7 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
             layer.trainable = True
                 
         # compile the model 
-        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.SGD(lr=lr,momentum=0.9,nesterov=True), metrics=["accuracy"])
+        final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.Adam(lr=lr), metrics=["accuracy"])
 
     # print model summary and stop if specified
     final_model.summary()
@@ -138,13 +141,14 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, tb_pa
 
     # fit model
     final_model.fit_generator(train_generator,
-                        steps_per_epoch = len(training_labels)/batch_size,
+                        steps_per_epoch = None,
                         epochs = max_epochs,
                         validation_data = val_generator,
                         validation_steps = val_steps,
                         callbacks = callback_list,
-                        workers=1, # Only use one worker or the batches will be dublicates of each other 
-                        use_multiprocessing=True)
+                        workers=3,
+                        use_multiprocessing=True,
+                        class_weight = class_weights)
     
     print("Finished training layers: {} - {}".format(start_layer,stop_layer), flush=True)
 
