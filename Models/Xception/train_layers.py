@@ -18,11 +18,13 @@ from keras import backend as K
 from keras.layers import Lambda, Input, GlobalMaxPooling2D
 from keras.callbacks import History 
 K.set_image_data_format('channels_last')
+from sklearn.utils.class_weight import compute_class_weight
 
 def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, model, tb_path, train_mode, max_epochs, lr, batch_size, clf_dropout, use_augment=True, lr_plateau =[5,0.01,1,0.000001], early_stop=[3,0.01], print_model_summary_only=False, restart=False, histogram_graphs=False, mean_pre_data=None):
     # load labels
     training_labels = load_labels(train_lbl)
     validation_labels = load_labels(val_lbl)
+    class_weights = compute_class_weight('balanced', np.unique(training_labels), training_labels)
     
     # labels must be from 0-num_classes-1, so label offset is subtracted
     unique, count = np.unique(training_labels,return_counts=True) 
@@ -113,7 +115,8 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, model
                         validation_steps = val_steps,
                         callbacks = callback_list,
                         workers=3,
-                        use_multiprocessing=True)
+                        use_multiprocessing=True,
+                        class_weight=class_weights)
 
     final_model.save(output_dir+"/final.h5")
 
