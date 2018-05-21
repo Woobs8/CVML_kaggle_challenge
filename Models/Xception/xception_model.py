@@ -85,7 +85,7 @@ if __name__ == "__main__":
     parser.add_argument('-pretraining', 
                         help='Boolean indicating wether to use pretrained imagenet weights',
                         type=str2bool,
-                        default=True
+                        default=True)
 
     parser.add_argument('-input_model', 
                         help='Path to .h5 model to initialize instance-based network',
