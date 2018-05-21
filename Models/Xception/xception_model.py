@@ -19,25 +19,30 @@ from keras.layers import Lambda, Input, GlobalMaxPooling2D
 from keras.callbacks import History 
 K.set_image_data_format('channels_last')
 
-def train_classifier(output_dir, input_model=None, print_model_summary=False, pretraining=True, use_resize=False, instance_based=False):
+def xception_model(output_dir, input_model=None, print_model_summary=False, pretraining=True, use_resize=False, instance_based=False):
     if pretraining:
+        print("Using pretraining")
         pretraining = "imagenet"
     else:
+        print("Using randomly initiated weights")        
         pretraining = None
 
     #Instance Based (stiching 2 images together)
     if instance_based:
+        print("Creating instance based model")
         base_model = Xception(pooling='avg', input_shape=(256,256*2,3), weights =  pretraining, include_top=False)     
     
     #Image Based with resizing (fit to original architecture input size)
     elif use_resize:
+        print("Creating image based model using resize")
         inp = Input(shape=(None, None, 3),name='image_input')
         inp_resize = Lambda(lambda image: K.tf.image.resize_images(image, (299, 299), K.tf.image.ResizeMethod.BICUBIC),name='image_resize')(inp)
         resize = Model(inp,inp_resize)
         base_model = Xception(input_tensor=resize.output, pooling='avg', weights = pretraining, include_top=False) 
 
     # Image based input size is 256 x 256 x 3
-    else: 
+    else:
+        print("Creating image based model with input size 256x256x3")
         base_model = Xception(weights = pretraining, pooling='avg' , include_top=False, input_shape = (256, 256, 3))
     
     # Create Top Layers
@@ -49,6 +54,7 @@ def train_classifier(output_dir, input_model=None, print_model_summary=False, pr
 
     # If input model is specified we load the model weights by name
     if input_model is not None:
+        print("Using input model weights %s"%(input_model))    
         final_model.load_weights(input_model, by_name=True)
   
     # All layers are made trainable
@@ -56,14 +62,14 @@ def train_classifier(output_dir, input_model=None, print_model_summary=False, pr
         layer.trainable = True
                 
     # Compile the model 
-    final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.Adam(lr=lr), metrics=["accuracy"])
+    final_model.compile(loss = "categorical_crossentropy", optimizer=optimizers.Adam(lr=0.001), metrics=["accuracy"])
 
     # Print model summary
     if print_model_summary:
         final_model.summary()
     
     # Finish script
-    final_model.save(output_dir+"base_model.h5")
+    final_model.save(output_dir+"/base_model.h5")
     print("Script finished model \"base_model.h5\" was placed in %s" %(output_dir))
     
 def str2bool(v):
