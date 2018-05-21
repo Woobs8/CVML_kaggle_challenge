@@ -89,7 +89,9 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, model
         for layer in final_model.layers:
             if train_mode == "top":
                 if "fc" in layer.name or "pred" in layer.name:
-                    layer.trainable=True 
+                    layer.trainable=True
+                else: 
+                    layer.trainable=False
             elif train_mode == "all":
                 layer.trainable = True
             else:
