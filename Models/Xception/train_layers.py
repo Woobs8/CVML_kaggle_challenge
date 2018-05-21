@@ -43,7 +43,12 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, model
         for layer in final_model.layers:
             if "dropout" in layer.name:
                 layer.rate = clf_dropout
-        
+
+    # Determine if model is instance based
+    if final_model.input.shape[1] != final_model.input.shape[2]:
+        instance_based = True
+    else:
+        instance_based = False
     
     # data generators
     train_generator = DataGenerator(path_to_images=train_data,
@@ -78,8 +83,8 @@ def train_classifier(train_data, train_lbl, val_data, val_lbl, output_dir, model
     # Create List of Callbacks
     callback_list = [checkpoint, early, tensorboard, plateau, history]
     
+    # If we are not to restart training from last point, set trainable layers
     if not restart:
-        # set trainable layers
         flag = False
         for layer in final_model.layers:
             if train_mode == "top":
